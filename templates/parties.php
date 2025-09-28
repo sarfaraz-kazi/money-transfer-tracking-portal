@@ -1,92 +1,152 @@
 <?php
 // templates/parties.php
 if (!defined('ABSPATH')) exit;
+
+$today = date('M j, Y');
+$total_previous = 0;
+$total_send = $up_total_send =0;
+$total_receive = $up_total_receive = 0;
+$total_current = 0;
+// Calculate total balances
+$total_current_balance = 0;
+if (!empty($parties)) {
+    foreach ($parties as $party) {
+        $total_current_balance += $party->current_balance;
+        $up_total_send += $party->today_send;
+        $up_total_receive += $party->today_receive;
+    }
+}
 ?>
 
 <div class="wrap">
-    <h1><span class="dashicons dashicons-groups"></span> Parties Management</h1>
+   
+    
+    <?php 
+    $user = wp_get_current_user();
+    $roles = $user->roles;
+    $role_names = array_map('ucfirst', $roles);
+    $display_name= ucfirst($user->display_name);
+    ?>
+    <div class="mtp-user-role-info">
+        <strong>Welcome, <?php echo esc_html($display_name); ?></strong> 
+        <span style="margin-left: 10px;">Role: <?php echo implode(', ', $role_names); ?></span>
+        <?php if (in_array('editor', $roles)): ?>
+            <span style="margin-left: 10px; color: #856404;">⚠️ Limited access - Contact administrator for full permissions</span>
+        <?php endif; ?>
+    </div>
+
+     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1><span class="dashicons dashicons-groups"></span> Daily Transaction Book - <?php echo $today; ?></h1>
+        <div class="mtp-total-balance">
+            <strong>Total Current Balance: <?php echo mtp_format_currency($total_current_balance); ?></strong>
+        </div>
+    </div>
+
+    <!-- Daily Summary -->
+    <div style="margin-top: 20px; padding: 20px; background: #fff; border: 1px solid #c3c4c7; border-radius: 4px;">
+        <h3 style="margin-top: 0;">Today's Summary</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+            <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                <div style="font-size: 24px; font-weight: bold; color: #dc3545;"><?php echo mtp_format_currency($up_total_send); ?></div>
+                <div style="font-size: 14px; color: #666;">Total Send Today</div>
+            </div>
+            <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                <div style="font-size: 24px; font-weight: bold; color: #198754;"><?php echo mtp_format_currency($up_total_receive); ?></div>
+                <div style="font-size: 14px; color: #666;">Total Receive Today</div>
+            </div>
+            <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                <div style="font-size: 24px; font-weight: bold; color: #0073aa;"><?php echo mtp_format_currency($up_total_receive - $up_total_send); ?></div>
+                <div style="font-size: 14px; color: #666;">Net Amount Today</div>
+            </div>
+        </div>
+    </div>
     
     <div class="mtp-actions">
         <button type="button" class="button button-primary" id="add-party-btn">
             <span class="dashicons dashicons-plus"></span> Add New Party
         </button>
         <input type="text" id="party-search" placeholder="Search parties..." style="width: 300px; margin-left: 20px;">
+        
+        <div style="float: right; color: #666; font-size: 14px;">
+            <strong>Today:</strong> <?php echo $today; ?> | 
+            <strong>Total Parties:</strong> <?php echo count($parties); ?>
+        </div>
     </div>
     
+ 
+
     <!-- Parties Table -->
     <div class="mtp-table-container">
         <div class="mtp-table-header">
-            <h3>All Parties</h3>
+            <h3>Today's Transactions</h3>
         </div>
         
         <?php if (!empty($parties)): ?>
             <table class="wp-list-table widefat striped parties-table">
                 <thead>
                     <tr>
-                        <th>Party Name</th>
-                        <th>Contact</th>
-                        <th>Opening Balance</th>
-                        <th>Current Balance</th>
-                        <th>Total Sales</th>
-                        <th>Total Received</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th style="width: 180px;">Party Name</th>
+                        <th style="width: 100px;">Previous Balance</th>
+                        <th style="width: 100px;">Today Send</th>
+                        <th style="width: 100px;">Today Receive</th>
+                        <th style="width: 120px;">Current Balance</th>
+                        <th style="width: 100px;">Contact</th>
+                        <th style="width: 160px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php 
-                    $total_opening = 0;
-                    $total_current = 0;
-                    $total_sales = 0;
-                    $total_received = 0;
+                   
                     
                     foreach ($parties as $party): 
-                        $total_opening += $party->opening_balance;
+                        $total_previous += $party->previous_balance;
+                        $total_send += $party->today_send;
+                        $total_receive += $party->today_receive;
                         $total_current += $party->current_balance;
-                        $total_sales += $party->total_sales;
-                        $total_received += $party->total_received;
                     ?>
-                    <tr>
+                    <tr data-party-id="<?php echo $party->id; ?>">
                         <td>
                             <strong class="party-name"><?php echo esc_html($party->party_name); ?></strong>
-                            <?php if ($party->email): ?>
-                                <br><small class="party-email"><?php echo esc_html($party->email); ?></small>
-                            <?php endif; ?>
+                            <span class="party-email" style="display: none;"><?php echo esc_html($party->email); ?></span>
+                            <span class="party-contact" style="display: none;"><?php echo esc_html($party->contact_number); ?></span>
+                            <span class="party-address" style="display: none;"><?php echo esc_html($party->address); ?></span>
                         </td>
-                        <td class="party-contact"><?php echo esc_html($party->contact_number); ?></td>
-                        <td><?php echo mtp_format_currency($party->opening_balance); ?></td>
-                        <td class="<?php echo $party->current_balance < 0 ? 'mtp-negative' : ($party->current_balance > 0 ? 'mtp-positive' : 'mtp-zero'); ?>">
+                        <td class="previous-balance"><?php echo mtp_format_currency($party->previous_balance); ?></td>
+                        <td class="today-send" style="color: #dc3545; font-weight: 600;">
+                            <?php echo $party->today_send > 0 ? mtp_format_currency($party->today_send) : '—'; ?>
+                        </td>
+                        <td class="today-receive" style="color: #198754; font-weight: 600;">
+                            <?php echo $party->today_receive > 0 ? mtp_format_currency($party->today_receive) : '—'; ?>
+                        </td>
+                        <td class="current-balance <?php echo $party->current_balance < 0 ? 'mtp-negative' : ($party->current_balance > 0 ? 'mtp-positive' : 'mtp-zero'); ?>">
                             <strong><?php echo mtp_format_currency($party->current_balance); ?></strong>
                         </td>
-                        <td><?php echo mtp_format_currency($party->total_sales); ?></td>
-                        <td><?php echo mtp_format_currency($party->total_received); ?></td>
-                        <td>
-                            <span class="mtp-badge mtp-badge-<?php echo $party->status; ?>">
-                                <?php echo ucfirst($party->status); ?>
-                            </span>
-                        </td>
+                        <td><?php echo esc_html($party->contact_number); ?></td>
                         <td class="mtp-table-row-actions">
-                            <button type="button" class="button button-small edit-party-btn" data-id="<?php echo $party->id; ?>">
-                                <span class="dashicons dashicons-edit"></span> Edit
+                            <button type="button" class="button button-primary button-small send-btn" data-id="<?php echo $party->id; ?>" title="Send Money">
+                                <span class="dashicons dashicons-arrow-up-alt"></span> Send
                             </button>
-                            <button type="button" class="button button-small button-link-delete delete-party-btn" data-id="<?php echo $party->id; ?>">
-                                <span class="dashicons dashicons-trash"></span> Delete
+                            <button type="button" class="button button-success button-small receive-btn" data-id="<?php echo $party->id; ?>" title="Receive Money">
+                                <span class="dashicons dashicons-arrow-down-alt"></span> Receive
                             </button>
-                            <span class="party-address" style="display: none;"><?php echo esc_html($party->address); ?></span>
+                            <?php if (current_user_can('manage_options')): ?>
+                            <button type="button" class="button button-small button-link-delete delete-party-btn" data-id="<?php echo $party->id; ?>" title="Delete Party">
+                                <span class="dashicons dashicons-trash"></span>
+                            </button>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
                 <tfoot>
-                    <tr style="background: #f0f0f0; font-weight: bold;">
+                    <tr style="background: #f0f0f0; font-weight: bold; border-top: 2px solid #0073aa;">
                         <th>TOTALS:</th>
-                        <th></th>
-                        <th><?php echo mtp_format_currency($total_opening); ?></th>
+                        <th><?php echo mtp_format_currency($total_previous); ?></th>
+                        <th style="color: #dc3545;"><?php echo mtp_format_currency($total_send); ?></th>
+                        <th style="color: #198754;"><?php echo mtp_format_currency($total_receive); ?></th>
                         <th class="<?php echo $total_current < 0 ? 'mtp-negative' : 'mtp-positive'; ?>">
                             <?php echo mtp_format_currency($total_current); ?>
                         </th>
-                        <th><?php echo mtp_format_currency($total_sales); ?></th>
-                        <th><?php echo mtp_format_currency($total_received); ?></th>
                         <th></th>
                         <th></th>
                     </tr>
@@ -98,17 +158,19 @@ if (!defined('ABSPATH')) exit;
                     <span class="dashicons dashicons-groups"></span>
                 </div>
                 <h3>No Parties Found</h3>
-                <p>Start by adding your first party to the system.</p>
+                <p>Start by adding your first party to begin daily transactions.</p>
                 <button type="button" class="button button-primary" id="add-party-btn">
                     <span class="dashicons dashicons-plus"></span> Add First Party
                 </button>
             </div>
         <?php endif; ?>
     </div>
+    
+   
 </div>
 
 <!-- Add Party Modal -->
-<div id="add-party-modal" class="mtp-modal">
+<div id="add-party-modal" class="mtp-modal" style="display: none;">
     <div class="mtp-modal-content">
         <div class="mtp-modal-header">
             <h2>Add New Party</h2>
@@ -132,8 +194,9 @@ if (!defined('ABSPATH')) exit;
                     <input type="email" id="email" name="email">
                 </div>
                 <div class="mtp-form-group">
-                    <label for="opening_balance">Opening Balance</label>
-                    <input type="number" id="opening_balance" name="opening_balance" step="0.01" value="0">
+                    <label for="previous_balance">Previous Balance</label>
+                    <input type="number" id="previous_balance" name="previous_balance" step="0.01" value="0">
+                    <small style="color: #666;">Opening balance for today</small>
                 </div>
             </div>
             
@@ -150,41 +213,179 @@ if (!defined('ABSPATH')) exit;
     </div>
 </div>
 
-<!-- Edit Party Modal -->
-<div id="edit-party-modal" class="mtp-modal">
+<!-- Quick Send Modal -->
+<div id="quick-send-modal" class="mtp-modal" style="display: none;">
     <div class="mtp-modal-content">
         <div class="mtp-modal-header">
-            <h2>Edit Party</h2>
+            <h2>Send Money - <span id="send-party-name"></span></h2>
             <button class="mtp-modal-close">&times;</button>
         </div>
-        <form id="edit-party-form">
-            <input type="hidden" id="edit_party_id" name="party_id">
-            <div class="mtp-form-row">
-                <div class="mtp-form-group">
-                    <label for="edit_party_name">Party Name *</label>
-                    <input type="text" id="edit_party_name" name="party_name" required>
-                </div>
-                <div class="mtp-form-group">
-                    <label for="edit_contact_number">Contact Number</label>
-                    <input type="text" id="edit_contact_number" name="contact_number">
-                </div>
-            </div>
+        <form id="quick-send-form">
+            <input type="hidden" id="send_party_id" name="party_id">
             
             <div class="mtp-form-row">
                 <div class="mtp-form-group">
-                    <label for="edit_email">Email</label>
-                    <input type="email" id="edit_email" name="email">
+                    <label for="send_amount">Amount *</label>
+                    <input type="number" id="send_amount" name="amount" step="0.01" min="0" required>
                 </div>
                 <div class="mtp-form-group">
-                    <label for="edit_address">Address</label>
-                    <textarea id="edit_address" name="address" rows="3"></textarea>
+                    <label for="receiver_name">Receiver Name</label>
+                    <input type="text" id="receiver_name" name="receiver_name" placeholder="Who will receive the money?">
                 </div>
+            </div>
+            
+            <div class="mtp-form-group">
+                <label for="send_description">Description</label>
+                <textarea id="send_description" name="description" rows="2" placeholder="Optional notes about this transaction"></textarea>
+            </div>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                <small><strong>Current Balance:</strong> <span id="send-current-balance"></span></small><br>
+                <small style="color: #856404;">This amount will be deducted from the party's balance</small>
             </div>
             
             <div class="mtp-form-actions">
-                <button type="submit" class="button button-primary">Update Party</button>
+                <button type="submit" class="button button-primary">
+                    <span class="dashicons dashicons-arrow-up-alt"></span> Send Money
+                </button>
                 <button type="button" class="button mtp-modal-close">Cancel</button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- Quick Receive Modal -->
+<div id="quick-receive-modal" class="mtp-modal" style="display: none;">
+    <div class="mtp-modal-content">
+        <div class="mtp-modal-header">
+            <h2>Receive Money - <span id="receive-party-name"></span></h2>
+            <button class="mtp-modal-close">&times;</button>
+        </div>
+        <form id="quick-receive-form">
+            <input type="hidden" id="receive_party_id" name="party_id">
+            
+            <div class="mtp-form-row">
+                <div class="mtp-form-group">
+                    <label for="receive_amount">Amount *</label>
+                    <input type="number" id="receive_amount" name="amount" step="0.01" min="0" required>
+                </div>
+                <div class="mtp-form-group">
+                    <label for="sender_name">Sender Name</label>
+                    <input type="text" id="sender_name" name="sender_name" placeholder="Who is sending the money?">
+                </div>
+            </div>
+            
+            <div class="mtp-form-group">
+                <label for="receive_description">Description</label>
+                <textarea id="receive_description" name="description" rows="2" placeholder="Optional notes about this transaction"></textarea>
+            </div>
+            
+            <div style="background: #d1e7dd; border: 1px solid #a3cfbb; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                <small><strong>Current Balance:</strong> <span id="receive-current-balance"></span></small><br>
+                <small style="color: #0a3622;">This amount will be added to the party's balance</small>
+            </div>
+            
+            <div class="mtp-form-actions">
+                <button type="submit" class="button button-primary">
+                    <span class="dashicons dashicons-arrow-down-alt"></span> Receive Money
+                </button>
+                <button type="button" class="button mtp-modal-close">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.button-success {
+    background: #28a745 !important;
+    border-color: #28a745 !important;
+    color: white !important;
+}
+
+.button-success:hover {
+    background: #218838 !important;
+    border-color: #218838 !important;
+}
+
+.mtp-table-row-actions .button {
+    margin-right: 5px;
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+.mtp-table-row-actions .dashicons {
+    font-size: 14px;
+    vertical-align: text-top;
+}
+
+.mtp-total-balance {
+    background: #0073aa;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+/* Highlight today's active transactions */
+.today-send:not(:contains('—')), 
+.today-receive:not(:contains('—')) {
+    background: #fff3cd;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+/* Better visual separation */
+.parties-table thead tr {
+    background: #f8f9fa;
+}
+
+.parties-table th {
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+    padding: 12px 8px;
+}
+
+.parties-table td {
+    padding: 10px 8px;
+    vertical-align: middle;
+}
+
+/* User Role Styling */
+.mtp-user-role-info {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin: 15px 0;
+    color: #856404;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .parties-table {
+        font-size: 13px;
+    }
+    
+    .mtp-table-row-actions .button {
+        font-size: 11px;
+        padding: 3px 6px;
+    }
+    
+    .mtp-total-balance {
+        font-size: 14px;
+        padding: 8px 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .wrap > div:first-child {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .mtp-total-balance {
+        margin-top: 10px;
+    }
+}
+</style>

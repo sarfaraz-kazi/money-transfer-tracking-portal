@@ -1,4 +1,4 @@
-// assets/admin.js - Simple Version
+// assets/admin.js - Complete Version
 
 jQuery(document).ready(function($) {
     'use strict';
@@ -19,17 +19,31 @@ jQuery(document).ready(function($) {
     function showLoading(button, show = true) {
         if (show) {
             button.prop('disabled', true).addClass('mtp-loading-btn');
+            const originalText = button.data('original-text') || button.html();
+            button.data('original-text', originalText);
+            button.html('<span class="dashicons dashicons-update mtp-spin"></span> Loading...');
         } else {
             button.prop('disabled', false).removeClass('mtp-loading-btn');
+            const originalText = button.data('original-text');
+            if (originalText) {
+                button.html(originalText);
+            }
         }
     }
     
+    function formatCurrency(amount) {
+        return '₹' + parseFloat(amount).toLocaleString('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
     // Modal Management
-    $('.mtp-modal-close').click(function() {
+    $(document).on('click', '.mtp-modal-close', function() {
         $(this).closest('.mtp-modal').hide();
     });
     
-    $('.mtp-modal').click(function(e) {
+    $(document).on('click', '.mtp-modal', function(e) {
         if (e.target === this) {
             $(this).hide();
         }
@@ -41,10 +55,10 @@ jQuery(document).ready(function($) {
         }
     });
     
-    // PARTY MANAGEMENT
+    // PARTY MANAGEMENT - Updated for daily system
     
     // Add Party
-    $('#add-party-btn').click(function() {
+    $(document).on('click', '#add-party-btn', function() {
         $('#add-party-modal').show();
         $('#add-party-form')[0].reset();
     });
@@ -76,50 +90,8 @@ jQuery(document).ready(function($) {
             });
     });
     
-    // Edit Party
-    $('.edit-party-btn').click(function() {
-        const row = $(this).closest('tr');
-        const partyId = $(this).data('id');
-        const partyName = row.find('.party-name').text();
-        const contact = row.find('.party-contact').text();
-        const email = row.find('.party-email').text();
-        const address = row.find('.party-address').text();
-        
-        $('#edit_party_id').val(partyId);
-        $('#edit_party_name').val(partyName);
-        $('#edit_contact_number').val(contact);
-        $('#edit_email').val(email);
-        $('#edit_address').val(address);
-        
-        $('#edit-party-modal').show();
-    });
-    
-    $('#edit-party-form').submit(function(e) {
-        e.preventDefault();
-        
-        const form = $(this);
-        const submitBtn = form.find('button[type="submit"]');
-        showLoading(submitBtn, true);
-        
-        const formData = form.serialize();
-        
-        $.post(mtp_ajax.ajax_url, formData + '&action=mtp_edit_party&nonce=' + mtp_ajax.nonce)
-            .done(function(response) {
-                if (response.success) {
-                    showNotification('Party updated successfully!');
-                    $('#edit-party-modal').hide();
-                    location.reload();
-                } else {
-                    showNotification(response.data || 'Error updating party', 'error');
-                }
-            })
-            .always(function() {
-                showLoading(submitBtn, false);
-            });
-    });
-    
     // Delete Party
-    $('.delete-party-btn').click(function() {
+    $(document).on('click', '.delete-party-btn', function() {
         const partyId = $(this).data('id');
         const partyName = $(this).closest('tr').find('.party-name').text();
         
@@ -139,6 +111,259 @@ jQuery(document).ready(function($) {
             });
         }
     });
+    
+    // QUICK SEND FUNCTIONALITY
+    $(document).on('click', '.send-btn', function() {
+        const partyId = $(this).data('id');
+        const row = $(this).closest('tr');
+        const partyName = row.find('.party-name').text();
+        const currentBalance = row.find('.current-balance strong').text();
+        
+        $('#send_party_id').val(partyId);
+        $('#send-party-name').text(partyName);
+        $('#send-current-balance').text(currentBalance);
+        
+        $('#quick-send-form')[0].reset();
+        $('#send_party_id').val(partyId); // Reset removes hidden input value
+        $('#quick-send-modal').show();
+        
+        // Focus on amount input
+        setTimeout(function() {
+            $('#send_amount').focus();
+        }, 300);
+    });
+    
+    $('#quick-send-form').submit(function(e) {
+        e.preventDefault();
+        
+        const form = $(this);
+        const submitBtn = form.find('button[type="submit"]');
+        const amount = parseFloat($('#send_amount').val());
+        
+        if (!amount || amount <= 0) {
+            showNotification('Please enter a valid amount', 'error');
+            return;
+        }
+        
+        showLoading(submitBtn, true);
+        
+        const formData = form.serialize();
+        
+        $.post(mtp_ajax.ajax_url, formData + '&action=mtp_quick_send&nonce=' + mtp_ajax.nonce)
+            .done(function(response) {
+                if (response.success) {
+                    showNotification(response.data.message);
+                    $('#quick-send-modal').hide();
+                    
+                    // Update the row in table
+                    // updatePartyRow($('#send_party_id').val(), response.data.new_balance, 'send', amount);
+                     location.reload();
+                } else {
+                    showNotification(response.data || 'Error processing send transaction', 'error');
+                }
+            })
+            .fail(function() {
+                showNotification('Network error. Please try again.', 'error');
+            })
+            .always(function() {
+                showLoading(submitBtn, false);
+            });
+    });
+    
+    // QUICK RECEIVE FUNCTIONALITY
+    $(document).on('click', '.receive-btn', function() {
+        const partyId = $(this).data('id');
+        const row = $(this).closest('tr');
+        const partyName = row.find('.party-name').text();
+        const currentBalance = row.find('.current-balance strong').text();
+        
+        $('#receive_party_id').val(partyId);
+        $('#receive-party-name').text(partyName);
+        $('#receive-current-balance').text(currentBalance);
+        
+        $('#quick-receive-form')[0].reset();
+        $('#receive_party_id').val(partyId); // Reset removes hidden input value
+        $('#quick-receive-modal').show();
+        
+        // Focus on amount input
+        setTimeout(function() {
+            $('#receive_amount').focus();
+        }, 300);
+    });
+    
+    $('#quick-receive-form').submit(function(e) {
+        e.preventDefault();
+        
+        const form = $(this);
+        const submitBtn = form.find('button[type="submit"]');
+        const amount = parseFloat($('#receive_amount').val());
+        
+        if (!amount || amount <= 0) {
+            showNotification('Please enter a valid amount', 'error');
+            return;
+        }
+        
+        showLoading(submitBtn, true);
+        
+        const formData = form.serialize();
+        
+        $.post(mtp_ajax.ajax_url, formData + '&action=mtp_quick_receive&nonce=' + mtp_ajax.nonce)
+            .done(function(response) {
+                if (response.success) {
+                    showNotification(response.data.message);
+                    $('#quick-receive-modal').hide();
+                    
+                    // Update the row in table
+                    //updatePartyRow($('#receive_party_id').val(), response.data.new_balance, 'receive', amount);
+                     location.reload();
+                } else {
+                    showNotification(response.data || 'Error processing receive transaction', 'error');
+                }
+            })
+            .fail(function() {
+                showNotification('Network error. Please try again.', 'error');
+            })
+            .always(function() {
+                showLoading(submitBtn, false);
+            });
+    });
+    /*
+    // Update party row after transaction
+    function updatePartyRow(partyId, newBalance, transactionType, amount) {
+        const row = $(`tr[data-party-id="${partyId}"]`);
+        
+        // Update current balance
+        const balanceCell = row.find('.current-balance');
+        const balanceValue = parseFloat(newBalance);
+        
+        balanceCell.removeClass('mtp-positive mtp-negative mtp-zero');
+        if (balanceValue > 0) {
+            balanceCell.addClass('mtp-positive');
+        } else if (balanceValue < 0) {
+            balanceCell.addClass('mtp-negative');
+        } else {
+            balanceCell.addClass('mtp-zero');
+        }
+        
+        balanceCell.find('strong').text(formatCurrency(newBalance));
+        
+        // Update today's send/receive
+        if (transactionType === 'send') {
+            const sendCell = row.find('.today-send');
+            let currentSend = sendCell.text();
+            if (currentSend === '—') {
+                currentSend = 0;
+            } else {
+                currentSend = parseFloat(currentSend.replace(/[₹,]/g, '')) || 0;
+            }
+            const newSendAmount = currentSend + amount;
+            sendCell.text(formatCurrency(newSendAmount));
+        } else if (transactionType === 'receive') {
+            const receiveCell = row.find('.today-receive');
+            let currentReceive = receiveCell.text();
+            if (currentReceive === '—') {
+                currentReceive = 0;
+            } else {
+                currentReceive = parseFloat(currentReceive.replace(/[₹,]/g, '')) || 0;
+            }
+            const newReceiveAmount = currentReceive + amount;
+            receiveCell.text(formatCurrency(newReceiveAmount));
+        }
+        
+        // Highlight the updated row briefly
+        row.css('background-color', '#e8f5e8');
+        setTimeout(function() {
+            row.css('background-color', '');
+        }, 2000);
+        
+        // Update totals row
+        updateTotalsRow();
+        
+        // Update total current balance in header
+        updateHeaderBalance();
+    }
+    */
+    
+    function updateTotalsRow() {
+        // Recalculate totals from all visible rows
+        let totalSend = 0;
+        let totalReceive = 0;
+        let totalCurrent = 0;
+        let totalPervious = 0;
+        
+        $('.parties-table tbody tr:visible').each(function() {
+            const sendText = $(this).find('.today-send').text();
+            const receiveText = $(this).find('.today-receive').text();
+            const currentText = $(this).find('.current-balance strong').text();
+            const perviousText = $(this).find('.previous-balance').text();
+            
+            if (sendText !== '—') {
+                totalSend += parseFloat(sendText.replace(/[₹,]/g, '')) || 0;
+            }
+            if (receiveText !== '—') {
+                totalReceive += parseFloat(receiveText.replace(/[₹,]/g, '')) || 0;
+            }
+            totalCurrent += parseFloat(currentText.replace(/[₹,]/g, '')) || 0;
+            totalPervious += parseFloat(perviousText.replace(/[₹,]/g, '')) || 0;
+        });
+        
+        // Update totals row
+        const totalsRow = $('.parties-table tfoot tr');
+        totalsRow.find('th:nth-child(3)').text(formatCurrency(totalSend));
+        totalsRow.find('th:nth-child(4)').text(formatCurrency(totalReceive));
+        
+        const currentBalanceCell = totalsRow.find('th:nth-child(5)');
+        currentBalanceCell.removeClass('mtp-positive mtp-negative');
+        currentBalanceCell.addClass(totalCurrent >= 0 ? 'mtp-positive' : 'mtp-negative');
+        currentBalanceCell.text(formatCurrency(totalCurrent));
+
+        const prevBalanceCell = totalsRow.find('th:nth-child(2)');
+        prevBalanceCell.removeClass('mtp-positive mtp-negative');
+        prevBalanceCell.addClass(totalPervious >= 0 ? 'mtp-positive' : 'mtp-negative');
+        prevBalanceCell.text(formatCurrency(totalPervious));
+        
+        // Update daily summary
+        updateDailySummary(totalSend, totalReceive);
+    }
+    
+    function updateHeaderBalance() {
+        // Recalculate total current balance for header
+        let totalCurrentBalance = 0;
+        
+        $('.parties-table tbody tr:visible').each(function() {
+            const currentText = $(this).find('.current-balance strong').text();
+            totalCurrentBalance += parseFloat(currentText.replace(/[₹,]/g, '')) || 0;
+        });
+        
+        $('.mtp-total-balance strong').text('Total Current Balance: ' + formatCurrency(totalCurrentBalance));
+    }
+    function updateDailySummary(totalSend, totalReceive) {
+        // Update the daily summary cards
+        const summaryContainer = $('div:contains("Today\'s Summary")').parent();
+        if (summaryContainer.length) {
+            const cards = summaryContainer.find('div[style*="font-size: 24px"]');
+            if (cards.length >= 3) {
+                cards.eq(0).text(formatCurrency(totalSend)); // Total Send
+                cards.eq(1).text(formatCurrency(totalReceive)); // Total Receive
+                cards.eq(2).text(formatCurrency(totalReceive - totalSend)); // Net Amount
+            }
+        }
+    }
+    
+    // Enter key shortcuts for quick transactions
+    $('#send_amount').keypress(function(e) {
+        if (e.which === 13) { // Enter key
+            $('#quick-send-form').submit();
+        }
+    });
+    
+    $('#receive_amount').keypress(function(e) {
+        if (e.which === 13) { // Enter key
+            $('#quick-receive-form').submit();
+        }
+    });
+
+    // TRANSACTION MANAGEMENT (keeping existing functionality)
     
     // Searchable Party Dropdown
     function initializeSearchableDropdown() {
@@ -230,13 +455,6 @@ jQuery(document).ready(function($) {
                 visibleItems.eq(selectedIndex).addClass('selected');
             }
         }
-        
-        function formatCurrency(amount) {
-            return '₹' + parseFloat(amount).toLocaleString('en-IN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-        }
     }
     
     // Initialize when add transaction modal opens
@@ -247,14 +465,7 @@ jQuery(document).ready(function($) {
         setTimeout(initializeSearchableDropdown, 100);
     });
 
-    // TRANSACTION MANAGEMENT
-    
     // Add Transaction
-    $('#add-transaction-btn').click(function() {
-        $('#add-transaction-modal').show();
-        $('#add-transaction-form')[0].reset();
-    });
-    
     $('#add-transaction-form').submit(function(e) {
         e.preventDefault();
         
@@ -348,7 +559,7 @@ jQuery(document).ready(function($) {
     $('#transaction_type').change(function() {
         const type = $(this).val();
         
-        if (type === 'sale') {
+        if (type === 'send') {
             $('.sender-receiver-fields').show();
         } else {
             $('.sender-receiver-fields').hide();
@@ -426,6 +637,10 @@ jQuery(document).ready(function($) {
             const text = row.text().toLowerCase();
             row.toggle(text.indexOf(searchTerm) > -1);
         });
+        
+        // Update totals after filtering
+        updateTotalsRow();
+        updateHeaderBalance();
     });
     
     $('#transaction-search').on('keyup', function() {
@@ -463,5 +678,5 @@ jQuery(document).ready(function($) {
         $('#date_to').val(toDate);
     });
     
-    console.log('Money Transfer Portal - Simple Version Loaded');
+    console.log('Money Transfer Portal - Complete Version Loaded');
 });
