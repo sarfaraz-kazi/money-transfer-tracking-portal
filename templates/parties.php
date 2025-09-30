@@ -18,7 +18,7 @@ if (!empty($parties)) {
 }
 ?>
 
-<div class="wrap">
+<div class="wrap mttp">
    
     
     <?php 
@@ -27,18 +27,19 @@ if (!empty($parties)) {
     $role_names = array_map('ucfirst', $roles);
     $display_name= ucfirst($user->display_name);
     ?>
-    <div class="mtp-user-role-info">
-        <strong>Welcome, <?php echo esc_html($display_name); ?></strong> 
-        <span style="margin-left: 10px;">Role: <?php echo implode(', ', $role_names); ?></span>
-        <?php if (in_array('editor', $roles)): ?>
-            <span style="margin-left: 10px; color: #856404;">⚠️ Limited access - Contact administrator for full permissions</span>
-        <?php endif; ?>
-    </div>
-
-     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+     <div class="top-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h1><span class="dashicons dashicons-groups"></span> Daily Transaction Book - <?php echo $today; ?></h1>
+         <button type="button" class="button button-primary button-large" id="add-party-btn">
+             <span class="dashicons dashicons-plus"></span> Add New Party
+         </button>
+         <input type="text" id="party-search" placeholder="Search parties..." style="width: 300px; margin-left: 20px;height: 50px">
+
+         <div style="float: right; color: #666; font-size: 14px;">
+             <strong>Today:</strong> <span style="font-weight: 700"><?php echo $today; ?></span> |
+             <strong>Total Parties:</strong> <span style="font-weight: 700;color: #198754"><?php echo count($parties); ?></span>
+         </div>
         <div class="mtp-total-balance">
-            <strong>Total Current Balance: <?php echo mtp_format_currency($total_current_balance); ?></strong>
+            <strong >Total Current Balance: <span style="color: #<?php echo ($total_current_balance > 0) ? '198754':'dc3545' ?>;font-weight: 700"><?php echo mtp_format_currency($total_current_balance); ?></span></strong>
         </div>
     </div>
 
@@ -60,21 +61,6 @@ if (!empty($parties)) {
             </div>
         </div>
     </div>
-    
-    <div class="mtp-actions">
-        <button type="button" class="button button-primary" id="add-party-btn">
-            <span class="dashicons dashicons-plus"></span> Add New Party
-        </button>
-        <input type="text" id="party-search" placeholder="Search parties..." style="width: 300px; margin-left: 20px;">
-        
-        <div style="float: right; color: #666; font-size: 14px;">
-            <strong>Today:</strong> <?php echo $today; ?> | 
-            <strong>Total Parties:</strong> <?php echo count($parties); ?>
-        </div>
-    </div>
-    
- 
-
     <!-- Parties Table -->
     <div class="mtp-table-container">
         <div class="mtp-table-header">
@@ -82,9 +68,10 @@ if (!empty($parties)) {
         </div>
         
         <?php if (!empty($parties)): ?>
-            <table class="wp-list-table widefat striped parties-table">
+            <table class="wp-list-table widefat striped parties-table" border="1">
                 <thead>
                     <tr>
+                        <th style="width: 50px;">Party ID</th>
                         <th style="width: 180px;">Party Name</th>
                         <th style="width: 100px;">Previous Balance</th>
                         <th style="width: 100px;">Today Send</th>
@@ -105,13 +92,14 @@ if (!empty($parties)) {
                         $total_current += $party->current_balance;
                     ?>
                     <tr data-party-id="<?php echo $party->id; ?>">
+                        <td><?php echo $party->id; ?></td>
                         <td>
                             <strong class="party-name"><?php echo esc_html($party->party_name); ?></strong>
                             <span class="party-email" style="display: none;"><?php echo esc_html($party->email); ?></span>
                             <span class="party-contact" style="display: none;"><?php echo esc_html($party->contact_number); ?></span>
                             <span class="party-address" style="display: none;"><?php echo esc_html($party->address); ?></span>
                         </td>
-                        <td class="previous-balance"><?php echo mtp_format_currency($party->previous_balance); ?></td>
+                        <td class="previous-balance" style="color: #<?php echo ($party->previous_balance > 0) ? '198754':'dc3545' ?>;font-weight: 700"><?php echo mtp_format_currency($party->previous_balance); ?></td>
                         <td class="today-send" style="color: #dc3545; font-weight: 600;">
                             <?php echo $party->today_send > 0 ? mtp_format_currency($party->today_send) : '—'; ?>
                         </td>
@@ -129,10 +117,17 @@ if (!empty($parties)) {
                             <button type="button" class="button button-success button-small receive-btn" data-id="<?php echo $party->id; ?>" title="Receive Money">
                                 <span class="dashicons dashicons-arrow-down-alt"></span> Receive
                             </button>
+
                             <?php if (current_user_can('manage_options')): ?>
                             <button type="button" class="button button-small button-link-delete delete-party-btn" data-id="<?php echo $party->id; ?>" title="Delete Party">
                                 <span class="dashicons dashicons-trash"></span>
                             </button>
+                            <?php endif; ?>
+                            <?php
+                            if(isZero($party->current_balance) && $party->previous_balance !=0 && (isZero($party->today_receive) && isZero($party->today_send) )): ?>
+                                <button type="button" class="button button-warning button-small migrate-btn" data-id="<?php echo $party->id; ?>" title="Update Current Balance">
+                                    <span class="dashicons dashicons-update"></span>
+                                </button>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -141,6 +136,7 @@ if (!empty($parties)) {
                 <tfoot>
                     <tr style="background: #f0f0f0; font-weight: bold; border-top: 2px solid #0073aa;">
                         <th>TOTALS:</th>
+                        <th></th>
                         <th><?php echo mtp_format_currency($total_previous); ?></th>
                         <th style="color: #dc3545;"><?php echo mtp_format_currency($total_send); ?></th>
                         <th style="color: #198754;"><?php echo mtp_format_currency($total_receive); ?></th>
@@ -319,8 +315,8 @@ if (!empty($parties)) {
 }
 
 .mtp-total-balance {
-    background: #0073aa;
-    color: white;
+    background: #999ea1;
+    color: #000;
     padding: 10px 15px;
     border-radius: 4px;
     font-size: 16px;

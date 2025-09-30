@@ -30,10 +30,12 @@ class MoneyTransferPortal {
     public function init() {
         add_action('admin_menu', array($this, 'admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'admin_scripts'));
-        
+        add_action( 'login_enqueue_scripts', array($this, 'my_custom_login_styles'));
+        add_action('template_redirect', array($this, 'redirect_frontend_to_admin'));
         // AJAX handlers
         add_action('wp_ajax_mtp_add_party', array($this, 'ajax_add_party'));
         add_action('wp_ajax_mtp_delete_party', array($this, 'ajax_delete_party'));
+        add_action('wp_ajax_mtp_migrate_party', array($this, 'ajax_migrate_party'));
         add_action('wp_ajax_mtp_quick_send', array($this, 'ajax_quick_send'));
         add_action('wp_ajax_mtp_quick_receive', array($this, 'ajax_quick_receive'));
         add_action('wp_ajax_mtp_add_transaction', array($this, 'ajax_add_transaction'));
@@ -54,7 +56,18 @@ class MoneyTransferPortal {
     public function deactivate() {
         // Cleanup if needed
     }
-    
+    public function redirect_frontend_to_admin() {
+
+        if (!is_admin() && !is_login_page()) {
+            if (is_user_logged_in()) {
+                wp_redirect(admin_url());
+                exit;
+            } else {
+                wp_redirect(wp_login_url());
+                exit;
+            }
+        }
+    }
     private function create_tables() {
         global $wpdb;
         
@@ -230,9 +243,6 @@ class MoneyTransferPortal {
     }
     
     public function admin_scripts($hook) {
-        if (strpos($hook, 'money-transfer') === false && strpos($hook, 'mtp-') === false) {
-            return;
-        }
         
         wp_enqueue_script('jquery');
         wp_enqueue_script('jquery-ui-datepicker');
@@ -248,7 +258,13 @@ class MoneyTransferPortal {
             'currency_symbol' => get_option('mtp_default_currency', 'INR')
         ));
     }
-    
+
+    // Add custom CSS to WP login page
+    public function my_custom_login_styles() {
+        wp_enqueue_style( 'custom-login', MTP_PLUGIN_URL . 'assets/custom-login.css' );
+    }
+
+
     public function dashboard_page() {
         global $wpdb;
         
@@ -302,15 +318,15 @@ class MoneyTransferPortal {
         
         // Get all parties
         $parties = $wpdb->get_results("
-            SELECT *,
-                COALESCE(previous_balance, 0) as previous_balance,
-                COALESCE(today_send, 0) as today_send,
-                COALESCE(today_receive, 0) as today_receive,
-                COALESCE(current_balance, 0) as current_balance
-            FROM $parties_table
-            WHERE status = 'active'
-            ORDER BY party_name ASC
-        ");
+    SELECT *,
+        COALESCE(previous_balance, 0) as previous_balance,
+        COALESCE(today_send, 0) as today_send,
+        COALESCE(today_receive, 0) as today_receive,
+        COALESCE(current_balance, 0) as current_balance
+    FROM $parties_table
+    WHERE status = 'active'
+    ORDER BY previous_balance ASC, id ASC
+");
         
         // Calculate today's transactions for each party
         foreach ($parties as $party) {
@@ -326,30 +342,46 @@ class MoneyTransferPortal {
                 $party->today_send = $today_transactions->today_send;
                 $party->today_receive = $today_transactions->today_receive;
             }
-                        
+
             // Calculate current balance
             if(!isZero($party->today_receive) || !isZero($party->today_send)){
                 $current_balance = $party->previous_balance + $party->today_receive - $party->today_send;
+
+                // Update the party record
+                $wpdb->update(
+                    $parties_table,
+                    array(
+                        'today_send' => $party->today_send,
+                        'today_receive' => $party->today_receive,
+                        'current_balance' => $current_balance,
+                        'last_transaction_date' => $today
+                    ),
+                    array('id' => $party->id),
+                    array('%f', '%f', '%f', '%s'),
+                    array('%d')
+                );
+            } else {
+                // Only update if current_balance is not already set (to preserve migrations)
+                if (isZero($party->current_balance)) {
+                    $current_balance = 0;
+
+                    $wpdb->update(
+                        $parties_table,
+                        array(
+                            'current_balance' => $current_balance,
+                            'last_transaction_date' => $today
+                        ),
+                        array('id' => $party->id),
+                        array('%f', '%s'),
+                        array('%d')
+                    );
+                } else {
+                    // Keep existing current_balance (for migrated parties)
+                    $current_balance = $party->current_balance;
+                }
             }
-            else{
-                $current_balance = 0;
-            }
-            
-            // Update the party record
-            $wpdb->update(
-                $parties_table,
-                array(
-                    'today_send' => $party->today_send,
-                    'today_receive' => $party->today_receive,
-                    'current_balance' => $current_balance,
-                    'last_transaction_date' => $today
-                ),
-                array('id' => $party->id),
-                array('%f', '%f', '%f', '%s'),
-                array('%d')
-            );
-            
-            // Update the party object
+
+// Update the party object
             $party->current_balance = $current_balance;
         }
         
@@ -477,7 +509,7 @@ class MoneyTransferPortal {
         }
         $total_pages = ceil($total_transactions / $per_page);
         // Get parties for dropdown
-        $parties = $wpdb->get_results("SELECT id, party_name FROM $parties_table WHERE status = 'active' ORDER BY party_name ASC");
+        $parties = $wpdb->get_results("SELECT id, party_name,current_balance FROM $parties_table WHERE status = 'active' ORDER BY party_name ASC");
         include MTP_PLUGIN_PATH . 'templates/transactions.php';
     }
     
@@ -529,7 +561,7 @@ class MoneyTransferPortal {
         
         $party_data = $wpdb->get_results($wpdb->prepare("
             SELECT 
-                p.party_name,
+                p.id,p.party_name,
                 COALESCE(p.current_balance, 0) as current_balance,
                 COALESCE(SUM(CASE WHEN t.transaction_type = 'send' THEN t.amount ELSE 0 END), 0) as period_sales,
                 COALESCE(SUM(CASE WHEN t.transaction_type = 'receive' THEN t.amount ELSE 0 END), 0) as period_received,
@@ -615,6 +647,58 @@ class MoneyTransferPortal {
         }
     }
 
+    public function ajax_migrate_party(){
+        check_ajax_referer('mtp_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Only administrators can migrate parties');
+            return;
+        }
+
+        global $wpdb;
+        $parties_table = $wpdb->prefix . 'mtp_parties';
+
+        $party_id = intval($_POST['party_id']);
+
+        try {
+            // Get the previous_balance value
+            $previous_balance = $wpdb->get_var($wpdb->prepare("
+        SELECT previous_balance 
+        FROM $parties_table 
+        WHERE id = %d
+    ", $party_id));
+
+            if ($previous_balance === null) {
+                wp_send_json_error('Party not found');
+                return;
+            }
+
+            // Update: move previous_balance to current_balance, reset previous_balance
+            // Also update last_transaction_date to prevent recalculation
+            $result = $wpdb->update(
+                $parties_table,
+                array(
+                    'current_balance' => $previous_balance,
+                    'previous_balance' => 0,
+                    'today_send' => 0,
+                    'today_receive' => 0,
+                    'last_transaction_date' => date('Y-m-d')
+                ),
+                array('id' => $party_id),
+                array('%f', '%f', '%f', '%f', '%s'),
+                array('%d')
+            );
+
+            if ($result === false) {
+                wp_send_json_error('Update failed: ' . $wpdb->last_error);
+                return;
+            }
+            wp_send_json_success('Party migrated successfully');
+        } catch (Exception $e) {
+            wp_send_json_error('Failed to migrate: ' . $e->getMessage());
+        }
+    }
+
     public function ajax_delete_party() {
         check_ajax_referer('mtp_nonce', 'nonce');
         
@@ -628,6 +712,16 @@ class MoneyTransferPortal {
         $transactions_table = $wpdb->prefix . 'mtp_transactions';
         
         $party_id = intval($_POST['party_id']);
+
+        $entered_pin = sanitize_text_field($_POST['pin']);
+
+        $correct_pin = '654321';
+
+        // Verify PIN
+        if ($entered_pin !== $correct_pin) {
+            wp_send_json_error('Incorrect PIN. Deletion cancelled.');
+            return;
+        }
         
         // Check if party has transactions
         $transaction_count = $wpdb->get_var($wpdb->prepare(
@@ -1157,6 +1251,12 @@ new MoneyTransferPortal();
 
 // Helper Functions
 
+
+// Helper function to check if current page is login page
+function is_login_page() {
+    return in_array($GLOBALS['pagenow'], array('wp-login.php', 'wp-register.php'));
+}
+
 function mtp_format_currency($amount) {
     return '₹' . number_format($amount, 2);
 }
@@ -1211,3 +1311,16 @@ function debug_display($data, $label = '', $return = false) {
 function isZero($value) {
     return floatval($value) == 0;
 }
+
+
+// Put this in your theme's functions.php or in a custom plugin
+
+add_action('admin_init', function() {
+    $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+
+    // If user opened wp-admin root without specifying a page
+    if ( preg_match('#/wp-admin/?$#', $request_uri) ) {
+        wp_redirect( admin_url( 'admin.php?page=money-transfer-portal' ) );
+        exit;
+    }
+});

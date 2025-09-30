@@ -94,13 +94,35 @@ jQuery(document).ready(function($) {
     $(document).on('click', '.delete-party-btn', function() {
         const partyId = $(this).data('id');
         const partyName = $(this).closest('tr').find('.party-name').text();
-        
-        if (confirm(`Are you sure you want to delete "${partyName}"? This action cannot be undone.`)) {
-            $.post(mtp_ajax.ajax_url, {
-                action: 'mtp_delete_party',
-                party_id: partyId,
-                nonce: mtp_ajax.nonce
-            })
+
+        // First confirmation
+        const confirmDelete = confirm(`Are you sure you want to delete "${partyName}"? This action cannot be undone.`);
+
+        if (!confirmDelete) {
+            return; // User clicked cancel
+        }
+
+        // Prompt for PIN
+        const pin = prompt('Please enter your 6-digit PIN to confirm deletion:');
+
+        // Check if user cancelled the prompt
+        if (pin === null) {
+            return;
+        }
+
+        // Check if PIN is exactly 6 digits
+        if (!/^\d{6}$/.test(pin)) {
+            alert('Invalid PIN. Please enter a 6-digit PIN.');
+            return;
+        }
+
+        // Send delete request with PIN
+        $.post(mtp_ajax.ajax_url, {
+            action: 'mtp_delete_party',
+            party_id: partyId,
+            pin: pin,
+            nonce: mtp_ajax.nonce
+        })
             .done(function(response) {
                 if (response.success) {
                     showNotification('Party deleted successfully!');
@@ -108,10 +130,34 @@ jQuery(document).ready(function($) {
                 } else {
                     showNotification(response.data || 'Error deleting party', 'error');
                 }
+            })
+            .fail(function() {
+                showNotification('An error occurred. Please try again.', 'error');
             });
+    });
+
+    $(document).on('click', '.migrate-btn', function() {
+        const partyId = $(this).data('id');
+        const partyName = $(this).closest('tr').find('.party-name').text();
+
+        if (confirm(`Are you sure you want to migrate "${partyName}" data? This action cannot be undone.`)) {
+            $.post(mtp_ajax.ajax_url, {
+                action: 'mtp_migrate_party',
+                party_id: partyId,
+                nonce: mtp_ajax.nonce
+            })
+                .done(function(response) {
+                    if (response.success) {
+                        showNotification('Party migrated successfully!');
+                        location.reload();
+                    } else {
+                        showNotification(response.data || 'Error migrating party', 'error');
+                    }
+                });
         }
     });
-    
+
+
     // QUICK SEND FUNCTIONALITY
     $(document).on('click', '.send-btn', function() {
         const partyId = $(this).data('id');
@@ -309,15 +355,15 @@ jQuery(document).ready(function($) {
         
         // Update totals row
         const totalsRow = $('.parties-table tfoot tr');
-        totalsRow.find('th:nth-child(3)').text(formatCurrency(totalSend));
-        totalsRow.find('th:nth-child(4)').text(formatCurrency(totalReceive));
+        totalsRow.find('th:nth-child(4)').text(formatCurrency(totalSend));
+        totalsRow.find('th:nth-child(5)').text(formatCurrency(totalReceive));
         
-        const currentBalanceCell = totalsRow.find('th:nth-child(5)');
+        const currentBalanceCell = totalsRow.find('th:nth-child(6)');
         currentBalanceCell.removeClass('mtp-positive mtp-negative');
         currentBalanceCell.addClass(totalCurrent >= 0 ? 'mtp-positive' : 'mtp-negative');
         currentBalanceCell.text(formatCurrency(totalCurrent));
 
-        const prevBalanceCell = totalsRow.find('th:nth-child(2)');
+        const prevBalanceCell = totalsRow.find('th:nth-child(3)');
         prevBalanceCell.removeClass('mtp-positive mtp-negative');
         prevBalanceCell.addClass(totalPervious >= 0 ? 'mtp-positive' : 'mtp-negative');
         prevBalanceCell.text(formatCurrency(totalPervious));

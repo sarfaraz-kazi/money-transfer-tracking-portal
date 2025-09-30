@@ -1,0 +1,73 @@
+body.login {
+    background: linear-gradient(135deg, #0d47a1, #1976d2, #42a5f5); /* Blue gradient for trust & finance */
+    font-family: 'Inter', sans-serif;
+}
+
+/* Hide WordPress logo completely */
+.login h1 {
+    display: none;
+}
+
+.login form {
+    background: #ffffff;
+    padding: 40px 30px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    max-width: 360px;
+}
+
+.login label {
+    font-weight: 600;
+    color: #1a237e;
+    font-size: 14px;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.login form .input, 
+.login input[type=text], 
+.login input[type=password] {
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    padding: 10px 14px;
+    width: 100%;
+    transition: 0.3s;
+}
+
+.login form .input:focus {
+    border-color: #1976d2;
+    box-shadow: 0 0 0 3px rgba(25,118,210,0.2);
+    outline: none;
+}
+
+/* Primary button styling */
+.wp-core-ui .button-primary {
+    background: #1976d2;
+    border-color: #1976d2;
+    border-radius: 10px;
+    font-size: 16px;
+    padding: 5px 20px;
+    font-weight: 600;
+    transition: background 0.3s ease;
+}
+
+.wp-core-ui .button-primary:hover {
+    background: #0d47a1;
+    border-color: #0d47a1;
+}
+
+/* Remove bottom links */
+.login #backtoblog, .login #nav {
+    display: none;
+}
+
+
+.login form .forgetmenot {
+    display: none;
+}
+
+.login .button-primary {
+    float: none;
+    width: 100%;
+    margin-top: 10px;
+}

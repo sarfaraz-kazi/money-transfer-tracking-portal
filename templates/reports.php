@@ -77,9 +77,10 @@ if (!defined('ABSPATH')) exit;
         
         <!-- Party-wise Report -->
         <h3>Party-wise Summary</h3>
-        <table class="wp-list-table widefat striped">
+        <table class="wp-list-table widefat striped" border="1">
             <thead>
                 <tr>
+                    <th>Party ID</th>
                     <th>Party Name</th>
                     <th>Current Balance</th>
                     <th>Period Sales</th>
@@ -99,6 +100,7 @@ if (!defined('ABSPATH')) exit;
                     $total_transactions_count += $party->transaction_count;
                 ?>
                 <tr class="party-report-row">
+                    <td><strong class="party-name"><?php echo esc_html($party->id); ?></strong></td>
                     <td><strong class="party-name"><?php echo esc_html($party->party_name); ?></strong></td>
                     <td class="party-balance <?php echo $party->current_balance < 0 ? 'mtp-negative' : ($party->current_balance > 0 ? 'mtp-positive' : 'mtp-zero'); ?>">
                         <?php echo mtp_format_currency($party->current_balance); ?>

@@ -523,3 +523,37 @@
 .mtp-notification-info {
     background: #17a2b8;
 }
+
+
+.index-php .postbox-container, div#screen-meta-links, #wp-admin-bar-site-name, #wp-admin-bar-new-content, #wp-admin-bar-comments, .form-table .user-comment-shortcuts-wrap,.form-table .user-admin-bar-front-wrap, #wp-admin-bar-wp-logo, #wpfooter {
+    display: none !important;
+}
+
+.index-php div#postbox-container-2 {
+    display: block !important;
+    width: 100% !important;
+}
+.index-php #dashboard-widgets .postbox {
+    padding-bottom: 5px !important;
+}
+.index-php #dashboard_quick_press .drafts ul {
+    margin: 20px !important;
+}
+
+.index-php .js #dashboard_quick_press .drafts {
+    padding: 0 0 10px 0;
+}
+
+.index-php #dashboard_quick_press .draft-title a {pointer-events: none;cursor: copy;}
+
+.widefat thead tr th {
+    background: #2271b1;
+    color: #FFF;
+}
+
+.mttp .top-bar .dashicons, .mttp .top-bar .dashicons-before:before {
+    line-height: 1.5;
+}
+.wp-core-ui .button.button-large{
+    padding: 10px 15px;
+}
