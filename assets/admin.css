@@ -200,7 +200,6 @@
 }
 
 .mtp-table-row-actions {
-    display: flex;
     gap: 5px;
 }
 
@@ -547,7 +546,7 @@
 .index-php #dashboard_quick_press .draft-title a {pointer-events: none;cursor: copy;}
 
 .widefat thead tr th {
-    background: #2271b1;
+    background: #0f172a;
     color: #FFF;
 }
 
@@ -557,3 +556,85 @@
 .wp-core-ui .button.button-large{
     padding: 10px 15px;
 }
+/* ======================== */
+/* Full-width Layout & Topbar for Plugin Pages */
+/* ======================== */
+
+/* Hide WordPress left admin menu and expand content for all plugin pages */
+body #adminmenuback,
+body #adminmenuwrap,
+body[class*="money-transfer-page_"] #adminmenuback,
+body[class*="money-transfer-page_"] #adminmenuwrap {
+    display: none !important;
+}
+
+body #wpcontent,
+body[class*="money-transfer-page_"] #wpcontent {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    width: 100% !important;
+}
+
+/* Hide WordPress top admin bar on plugin pages and remove offset */
+body.admin-bar #wpadminbar,
+body[class*="money-transfer-page_"].admin-bar #wpadminbar {
+    display: none !important;
+}
+body.admin-bar,
+body[class*="money-transfer-page_"].admin-bar {
+    padding-top: 0 !important;
+}
+
+/* Modern top header navigation */
+html.wp-toolbar, .wrap.mttp  {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.mtp-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0f172a; /* slate-900 */
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 0;
+    margin: 0 0 20px 0;
+}
+
+.mtp-topbar__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.mtp-topbar__title {
+    font-size: 16px;
+}
+
+.mtp-topbar__nav {
+    display: flex;
+    gap: 8px;
+}
+
+.mtp-topbar__link {
+    color: #cbd5e1; /* slate-300 */
+    text-decoration: none;
+    padding: 8px 10px;
+    border-radius: 4px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mtp-topbar__link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.mtp-topbar__link.is-active {
+    background: #1e293b; /* slate-800 */
+    color: #fff;
+}
+
+.mtp-topbar__spacer { flex: 0 0 auto; }
+.mtp-topbar__user { color: #cbd5e1; font-weight: 500; }

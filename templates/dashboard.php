@@ -4,6 +4,7 @@ if (!defined('ABSPATH')) exit;
 ?>
 
 <div class="wrap">
+    <?php include dirname(__FILE__) . '/partials/top-nav.php'; ?>
     <h1><span class="dashicons dashicons-money-alt"></span> Money Transfer Portal</h1>
     
     <?php 

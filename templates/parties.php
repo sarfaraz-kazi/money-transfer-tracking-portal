@@ -19,6 +19,7 @@ if (!empty($parties)) {
 ?>
 
 <div class="wrap mttp">
+    <?php include dirname(__FILE__) . '/partials/top-nav.php'; ?>
    
     
     <?php 
@@ -27,7 +28,7 @@ if (!empty($parties)) {
     $role_names = array_map('ucfirst', $roles);
     $display_name= ucfirst($user->display_name);
     ?>
-     <div class="top-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+     <div class="top-bar" style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0;">
         <h1><span class="dashicons dashicons-groups"></span> Daily Transaction Book - <?php echo $today; ?></h1>
          <button type="button" class="button button-primary button-large" id="add-party-btn">
              <span class="dashicons dashicons-plus"></span> Add New Party
@@ -63,12 +64,8 @@ if (!empty($parties)) {
     </div>
     <!-- Parties Table -->
     <div class="mtp-table-container">
-        <div class="mtp-table-header">
-            <h3>Today's Transactions</h3>
-        </div>
-        
         <?php if (!empty($parties)): ?>
-            <table class="wp-list-table widefat striped parties-table" border="1">
+            <table class="wp-list-table widefat striped parties-table" border="1" style="border-color: #000;">
                 <thead>
                     <tr>
                         <th style="width: 50px;">Party ID</th>

@@ -5,10 +5,11 @@ if (!defined('ABSPATH')) exit;
 $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
 ?>
 
-<div class="wrap">
-    <h1><span class="dashicons dashicons-money"></span> Transactions Management</h1>
+<div class="wrap mttp">
+    <?php include dirname(__FILE__) . '/partials/top-nav.php'; ?>
     
-    <div class="mtp-actions">
+    <div class="mtp-actions top-bar">
+    <h1><span class="dashicons dashicons-money"></span> Transactions</h1>
         <button type="button" class="button button-primary" id="add-transaction-btn">
             <span class="dashicons dashicons-plus"></span> Add New Transaction
         </button>
@@ -22,7 +23,7 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
         </div>
         
         <?php if (!empty($transactions)): ?>
-            <table class="wp-list-table widefat striped transactions-table">
+            <table class="wp-list-table widefat striped parties-table" border="1" style="border-color: #000;">
                 <thead>
                     <tr>
                         <th>Reference #</th>

@@ -3,9 +3,11 @@
 if (!defined('ABSPATH')) exit;
 ?>
 
-<div class="wrap">
-    <h1><span class="dashicons dashicons-chart-bar"></span> Reports</h1>
-    
+<div class="wrap mttp">
+    <?php include dirname(__FILE__) . '/partials/top-nav.php'; ?>
+    <div class="top-bar">
+        <h1><span class="dashicons dashicons-chart-bar"></span> Reports</h1>
+    </div>
     <!-- Report Controls -->
     <div class="mtp-report-controls">
         <form method="GET" class="mtp-report-form">
@@ -130,7 +132,7 @@ if (!defined('ABSPATH')) exit;
         <?php if ($report_type === 'summary' || $report_type === 'party_wise'): ?>
             <!-- Party-wise Report -->
             <h3>Party-wise Summary</h3>
-            <table class="wp-list-table widefat striped" border="1">
+            <table class="wp-list-table widefat striped parties-table" border="1" style="border-color: #000;">
                 <thead>
                     <tr>
                         <th>Party ID</th>
@@ -180,7 +182,7 @@ if (!defined('ABSPATH')) exit;
         <?php elseif ($report_type === 'daily'): ?>
             <!-- Daily Transactions Report -->
             <h3>Daily Transactions</h3>
-            <table class="wp-list-table widefat striped" border="1">
+            <table class="wp-list-table widefat striped parties-table" border="1" style="border-color: #000;">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -217,7 +219,7 @@ if (!defined('ABSPATH')) exit;
         <?php elseif ($report_type === 'daily_balances'): ?>
             <!-- Daily Balances History Report -->
             <h3>Daily Balances (History)</h3>
-            <table class="wp-list-table widefat striped" border="1">
+            <table class="wp-list-table widefat striped parties-table" border="1" style="border-color: #000;">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -263,7 +265,7 @@ if (!defined('ABSPATH')) exit;
             <!-- Daily Balances by Party -->
             <h3>Daily Balances — Party Detail</h3>
             <?php if (!empty($report_data->rows)) : ?>
-            <table class="wp-list-table widefat striped" border="1">
+            <table class="wp-list-table widefat striped parties-table" border="1" style="border-color: #000;">
                 <thead>
                     <tr>
                         <th>Date</th>
