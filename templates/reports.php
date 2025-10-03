@@ -20,6 +20,16 @@ if (!defined('ABSPATH')) exit;
                 <label for="date_to">To Date:</label>
                 <input type="date" id="date_to" name="date_to" value="<?php echo esc_attr($date_to); ?>">
             </div>
+
+            <div class="form-group">
+                <label for="report_type">Report Type:</label>
+                <select id="report_type" name="report_type">
+                    <option value="summary" <?php echo $report_type === 'summary' ? 'selected' : ''; ?>>Summary</option>
+                    <option value="party_wise" <?php echo $report_type === 'party_wise' ? 'selected' : ''; ?>>Party-wise</option>
+                    <option value="daily" <?php echo $report_type === 'daily' ? 'selected' : ''; ?>>Daily (Transactions)</option>
+                    <option value="daily_balances" <?php echo $report_type === 'daily_balances' ? 'selected' : ''; ?>>Daily Balances (History)</option>
+                </select>
+            </div>
             
             <div class="form-group">
                 <button type="button" id="generate-report-btn" class="button button-primary">
@@ -53,74 +63,182 @@ if (!defined('ABSPATH')) exit;
         </div>
         
         <!-- Summary Cards -->
-        <div class="mtp-report-summary">
-            <div class="mtp-summary-card">
-                <div class="mtp-summary-value"><?php echo number_format($report_data->total_transactions); ?></div>
-                <div class="mtp-summary-label">Total Transactions</div>
-            </div>
-            
-            <div class="mtp-summary-card">
-                <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_sales); ?></div>
-                <div class="mtp-summary-label">Total Sales</div>
-            </div>
-            
-            <div class="mtp-summary-card">
-                <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_received); ?></div>
-                <div class="mtp-summary-label">Total Received</div>
-            </div>
-            
-            <div class="mtp-summary-card">
-                <div class="mtp-summary-value"><?php echo number_format($report_data->active_parties); ?></div>
-                <div class="mtp-summary-label">Active Parties</div>
-            </div>
-        </div>
-        
-        <!-- Party-wise Report -->
-        <h3>Party-wise Summary</h3>
-        <table class="wp-list-table widefat striped" border="1">
-            <thead>
-                <tr>
-                    <th>Party ID</th>
-                    <th>Party Name</th>
-                    <th>Current Balance</th>
-                    <th>Period Sales</th>
-                    <th>Period Received</th>
-                    <th>Transactions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php 
-                $total_period_sales = 0;
-                $total_period_received = 0;
-                $total_transactions_count = 0;
+        <?php if ($report_type === 'summary' || $report_type === 'party_wise' || $report_type === 'daily'): ?>
+            <div class="mtp-report-summary">
+                <?php if ($report_type !== 'daily_balances'): ?>
+                    <div class="mtp-summary-card">
+                        <div class="mtp-summary-value"><?php echo number_format((int)$report_data->total_transactions); ?></div>
+                        <div class="mtp-summary-label">Total Transactions</div>
+                    </div>
+                <?php endif; ?>
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_sales); ?></div>
+                    <div class="mtp-summary-label">Total Sales</div>
+                </div>
                 
-                foreach ($report_data->party_data as $party): 
-                    $total_period_sales += $party->period_sales;
-                    $total_period_received += $party->period_received;
-                    $total_transactions_count += $party->transaction_count;
-                ?>
-                <tr class="party-report-row">
-                    <td><strong class="party-name"><?php echo esc_html($party->id); ?></strong></td>
-                    <td><strong class="party-name"><?php echo esc_html($party->party_name); ?></strong></td>
-                    <td class="party-balance <?php echo $party->current_balance < 0 ? 'mtp-negative' : ($party->current_balance > 0 ? 'mtp-positive' : 'mtp-zero'); ?>">
-                        <?php echo mtp_format_currency($party->current_balance); ?>
-                    </td>
-                    <td class="party-sales"><?php echo mtp_format_currency($party->period_sales); ?></td>
-                    <td class="party-received"><?php echo mtp_format_currency($party->period_received); ?></td>
-                    <td class="party-count"><?php echo number_format($party->transaction_count); ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-            <tfoot>
-                <tr style="background: #f0f0f0; font-weight: bold;">
-                    <th>TOTALS:</th>
-                    <th></th>
-                    <th><?php echo mtp_format_currency($total_period_sales); ?></th>
-                    <th><?php echo mtp_format_currency($total_period_received); ?></th>
-                    <th><?php echo number_format($total_transactions_count); ?></th>
-                </tr>
-            </tfoot>
-        </table>
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_received); ?></div>
+                    <div class="mtp-summary-label">Total Received</div>
+                </div>
+                
+                <?php if (isset($report_data->active_parties)): ?>
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo number_format((int)$report_data->active_parties); ?></div>
+                    <div class="mtp-summary-label">Active Parties</div>
+                </div>
+                <?php endif; ?>
+            </div>
+        <?php elseif ($report_type === 'daily_balances'): ?>
+            <div class="mtp-report-summary">
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_opening); ?></div>
+                    <div class="mtp-summary-label">Total Opening</div>
+                </div>
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_sales); ?></div>
+                    <div class="mtp-summary-label">Total Send</div>
+                </div>
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_received); ?></div>
+                    <div class="mtp-summary-label">Total Received</div>
+                </div>
+                <div class="mtp-summary-card">
+                    <div class="mtp-summary-value"><?php echo mtp_format_currency($report_data->total_closing); ?></div>
+                    <div class="mtp-summary-label">Total Closing</div>
+                </div>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($report_type === 'summary' || $report_type === 'party_wise'): ?>
+            <!-- Party-wise Report -->
+            <h3>Party-wise Summary</h3>
+            <table class="wp-list-table widefat striped" border="1">
+                <thead>
+                    <tr>
+                        <th>Party ID</th>
+                        <th>Party Name</th>
+                        <th>Current Balance</th>
+                        <th>Period Sales</th>
+                        <th>Period Received</th>
+                        <th>Transactions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $total_period_sales = 0;
+                    $total_period_received = 0;
+                    $total_transactions_count = 0;
+                    
+                    foreach ($report_data->party_data as $party): 
+                        $total_period_sales += $party->period_sales;
+                        $total_period_received += $party->period_received;
+                        $total_transactions_count += $party->transaction_count;
+                    ?>
+                    <tr class="party-report-row">
+                        <td><strong class="party-name"><?php echo esc_html($party->id); ?></strong></td>
+                        <td><strong class="party-name"><?php echo esc_html($party->party_name); ?></strong></td>
+                        <td class="party-balance <?php echo $party->current_balance < 0 ? 'mtp-negative' : ($party->current_balance > 0 ? 'mtp-positive' : 'mtp-zero'); ?>">
+                            <?php echo mtp_format_currency($party->current_balance); ?>
+                        </td>
+                        <td class="party-sales"><?php echo mtp_format_currency($party->period_sales); ?></td>
+                        <td class="party-received"><?php echo mtp_format_currency($party->period_received); ?></td>
+                        <td class="party-count"><?php echo number_format($party->transaction_count); ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0; font-weight: bold;">
+                        <th>TOTALS:</th>
+                        <th></th>
+                        <th><?php echo mtp_format_currency($total_period_sales); ?></th>
+                        <th><?php echo mtp_format_currency($total_period_received); ?></th>
+                        <th><?php echo number_format($total_transactions_count); ?></th>
+                    </tr>
+                </tfoot>
+            </table>
+        <?php elseif ($report_type === 'daily'): ?>
+            <!-- Daily Transactions Report -->
+            <h3>Daily Transactions</h3>
+            <table class="wp-list-table widefat striped" border="1">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Daily Send</th>
+                        <th>Daily Received</th>
+                        <th>Transactions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $sum_send = 0; $sum_receive = 0; $sum_txn = 0;
+                    foreach ($report_data->daily_data as $row):
+                        $sum_send += (float)$row->daily_send;
+                        $sum_receive += (float)$row->daily_receive;
+                        $sum_txn += (int)$row->daily_transactions;
+                    ?>
+                        <tr class="daily-report-row">
+                            <td><?php echo esc_html($row->transaction_date); ?></td>
+                            <td class="daily-send"><?php echo mtp_format_currency($row->daily_send); ?></td>
+                            <td class="daily-receive"><?php echo mtp_format_currency($row->daily_receive); ?></td>
+                            <td class="daily-count"><?php echo number_format($row->daily_transactions); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0; font-weight: bold;">
+                        <th>TOTALS:</th>
+                        <th><?php echo mtp_format_currency($sum_send); ?></th>
+                        <th><?php echo mtp_format_currency($sum_receive); ?></th>
+                        <th><?php echo number_format($sum_txn); ?></th>
+                    </tr>
+                </tfoot>
+            </table>
+        <?php elseif ($report_type === 'daily_balances'): ?>
+            <!-- Daily Balances History Report -->
+            <h3>Daily Balances (History)</h3>
+            <table class="wp-list-table widefat striped" border="1">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Opening Total</th>
+                        <th>Total Send</th>
+                        <th>Total Received</th>
+                        <th>Closing Total</th>
+                        <th>Parties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $sum_open = 0; $sum_send2 = 0; $sum_receive2 = 0; $sum_close = 0; $sum_parties = 0;
+                    foreach ($report_data->daily_history as $row):
+                        $sum_open += (float)$row->opening_total;
+                        $sum_send2 += (float)$row->daily_send_total;
+                        $sum_receive2 += (float)$row->daily_receive_total;
+                        $sum_close += (float)$row->closing_total;
+                        $sum_parties += (int)$row->parties_count;
+                    ?>
+                        <tr class="daily-balances-row">
+                            <td><?php echo esc_html($row->transaction_date); ?></td>
+                            <td class="daily-opening"><?php echo mtp_format_currency($row->opening_total); ?></td>
+                            <td class="daily-send"><?php echo mtp_format_currency($row->daily_send_total); ?></td>
+                            <td class="daily-receive"><?php echo mtp_format_currency($row->daily_receive_total); ?></td>
+                            <td class="daily-closing"><?php echo mtp_format_currency($row->closing_total); ?></td>
+                            <td class="daily-parties"><?php echo number_format($row->parties_count); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0; font-weight: bold;">
+                        <th>TOTALS:</th>
+                        <th><?php echo mtp_format_currency($sum_open); ?></th>
+                        <th><?php echo mtp_format_currency($sum_send2); ?></th>
+                        <th><?php echo mtp_format_currency($sum_receive2); ?></th>
+                        <th><?php echo mtp_format_currency($sum_close); ?></th>
+                        <th><?php echo number_format($sum_parties); ?></th>
+                    </tr>
+                </tfoot>
+            </table>
+        <?php endif; ?>
         
         <!-- Net Position -->
         <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px;">

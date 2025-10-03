@@ -618,6 +618,7 @@ jQuery(document).ready(function($) {
     $('#generate-report-btn').click(function() {
         const dateFrom = $('#date_from').val();
         const dateTo = $('#date_to').val();
+        const reportType = $('#report_type').val();
         
         if (!dateFrom || !dateTo) {
             showNotification('Please select both from and to dates', 'warning');
@@ -626,7 +627,7 @@ jQuery(document).ready(function($) {
         
         const url = window.location.pathname + window.location.search + 
             (window.location.search ? '&' : '?') + 
-            'generate_report=1&date_from=' + dateFrom + '&date_to=' + dateTo;
+            'generate_report=1&date_from=' + dateFrom + '&date_to=' + dateTo + '&report_type=' + encodeURIComponent(reportType);
             
         window.location.href = url;
     });
@@ -644,20 +645,47 @@ jQuery(document).ready(function($) {
         // Create CSV content
         let csvContent = "data:text/csv;charset=utf-8,";
         
-        // Add headers
-        csvContent += "Party Name,Current Balance,Period Sales,Period Received,Transaction Count\n";
-        
-        // Add data rows
-        $('.party-report-row').each(function() {
-            const row = $(this);
-            const partyName = row.find('.party-name').text();
-            const balance = row.find('.party-balance').text().replace('₹', '').replace(/,/g, '');
-            const sales = row.find('.party-sales').text().replace('₹', '').replace(/,/g, '');
-            const received = row.find('.party-received').text().replace('₹', '').replace(/,/g, '');
-            const count = row.find('.party-count').text();
-            
-            csvContent += `"${partyName}",${balance},${sales},${received},${count}\n`;
-        });
+        if ($('.party-report-row').length) {
+            // Party-wise export
+            csvContent += "Party ID,Party Name,Current Balance,Period Sales,Period Received,Transactions\n";
+            $('.party-report-row').each(function() {
+                const row = $(this);
+                const partyId = row.find('td').eq(0).text().trim();
+                const partyName = row.find('td').eq(1).text().trim();
+                const balance = row.find('.party-balance').text().replace('₹', '').replace(/,/g, '').trim();
+                const sales = row.find('.party-sales').text().replace('₹', '').replace(/,/g, '').trim();
+                const received = row.find('.party-received').text().replace('₹', '').replace(/,/g, '').trim();
+                const count = row.find('.party-count').text().trim();
+                csvContent += `"${partyId}","${partyName}",${balance},${sales},${received},${count}\n`;
+            });
+        } else if ($('.daily-report-row').length) {
+            // Daily transactions export
+            csvContent += "Date,Daily Send,Daily Received,Transactions\n";
+            $('.daily-report-row').each(function() {
+                const row = $(this);
+                const date = row.find('td').eq(0).text().trim();
+                const send = row.find('.daily-send').text().replace('₹', '').replace(/,/g, '').trim();
+                const receive = row.find('.daily-receive').text().replace('₹', '').replace(/,/g, '').trim();
+                const count = row.find('.daily-count').text().trim();
+                csvContent += `"${date}",${send},${receive},${count}\n`;
+            });
+        } else if ($('.daily-balances-row').length) {
+            // Daily balances history export
+            csvContent += "Date,Opening Total,Total Send,Total Received,Closing Total,Parties\n";
+            $('.daily-balances-row').each(function() {
+                const row = $(this);
+                const date = row.find('td').eq(0).text().trim();
+                const opening = row.find('.daily-opening').text().replace('₹', '').replace(/,/g, '').trim();
+                const send = row.find('.daily-send').text().replace('₹', '').replace(/,/g, '').trim();
+                const receive = row.find('.daily-receive').text().replace('₹', '').replace(/,/g, '').trim();
+                const closing = row.find('.daily-closing').text().replace('₹', '').replace(/,/g, '').trim();
+                const parties = row.find('.daily-parties').text().trim();
+                csvContent += `"${date}",${opening},${send},${receive},${closing},${parties}\n`;
+            });
+        } else {
+            showNotification('No report data to export', 'warning');
+            return;
+        }
         
         // Create download link
         const encodedUri = encodeURI(csvContent);

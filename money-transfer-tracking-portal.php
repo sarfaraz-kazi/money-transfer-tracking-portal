@@ -318,15 +318,15 @@ class MoneyTransferPortal {
         
         // Get all parties
         $parties = $wpdb->get_results("
-    SELECT *,
-        COALESCE(previous_balance, 0) as previous_balance,
-        COALESCE(today_send, 0) as today_send,
-        COALESCE(today_receive, 0) as today_receive,
-        COALESCE(current_balance, 0) as current_balance
-    FROM $parties_table
-    WHERE status = 'active'
-    ORDER BY previous_balance ASC, id ASC
-");
+            SELECT *,
+                COALESCE(previous_balance, 0) as previous_balance,
+                COALESCE(today_send, 0) as today_send,
+                COALESCE(today_receive, 0) as today_receive,
+                COALESCE(current_balance, 0) as current_balance
+            FROM $parties_table
+            WHERE status = 'active'
+            ORDER BY id ASC
+        ");
         
         // Calculate today's transactions for each party
         foreach ($parties as $party) {
@@ -425,13 +425,11 @@ class MoneyTransferPortal {
             // Reset for new day - yesterday's closing becomes today's opening
             $parties_update_array = array(
                     'previous_balance' => $party->current_balance,
+                    'current_balance' => 0,
                     'today_send' => 0,
                     'today_receive' => 0,
                     'last_transaction_date' => $today
             );
-            if(isZero($party->current_balance)){
-                unset($parties_update_array['previous_balance']);
-            }
             $wpdb->update(
                 $parties_table,
                 $parties_update_array,
@@ -536,6 +534,9 @@ class MoneyTransferPortal {
                 case 'daily':
                     $report_data = $this->generate_daily_report($date_from, $date_to);
                     break;
+                case 'daily_balances':
+                    $report_data = $this->generate_daily_balances_report($date_from, $date_to);
+                    break;
                 default:
                     $report_data = $this->generate_summary_report($date_from, $date_to);
             }
@@ -606,6 +607,45 @@ class MoneyTransferPortal {
         $report->total_sales = array_sum(array_column($daily_data, 'daily_send'));
         $report->total_received = array_sum(array_column($daily_data, 'daily_receive'));
         
+        return $report;
+    }
+
+    private function generate_daily_balances_report($date_from, $date_to) {
+        global $wpdb;
+        $daily_balances_table = $wpdb->prefix . 'mtp_daily_balances';
+
+        // Aggregate per day from history table
+        $daily_history = $wpdb->get_results($wpdb->prepare("
+            SELECT 
+                transaction_date,
+                SUM(COALESCE(opening_balance,0)) as opening_total,
+                SUM(COALESCE(total_send,0)) as daily_send_total,
+                SUM(COALESCE(total_receive,0)) as daily_receive_total,
+                SUM(COALESCE(closing_balance,0)) as closing_total,
+                COUNT(DISTINCT party_id) as parties_count
+            FROM $daily_balances_table
+            WHERE transaction_date BETWEEN %s AND %s
+            GROUP BY transaction_date
+            ORDER BY transaction_date DESC
+        ", $date_from, $date_to));
+
+        $report = new stdClass();
+        $report->daily_history = $daily_history;
+        $report->days_count = is_array($daily_history) ? count($daily_history) : 0;
+        $report->total_opening = array_sum(array_map(function($r){ return (float)$r->opening_total; }, $daily_history));
+        $report->total_sales = array_sum(array_map(function($r){ return (float)$r->daily_send_total; }, $daily_history));
+        $report->total_received = array_sum(array_map(function($r){ return (float)$r->daily_receive_total; }, $daily_history));
+        $report->total_closing = array_sum(array_map(function($r){ return (float)$r->closing_total; }, $daily_history));
+
+        // Distinct parties appearing in the selected period
+        $report->active_parties = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT party_id) FROM $daily_balances_table WHERE transaction_date BETWEEN %s AND %s",
+            $date_from, $date_to
+        ));
+
+        // No raw transaction count in balances history
+        $report->total_transactions = 0;
+
         return $report;
     }
 

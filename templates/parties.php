@@ -2,7 +2,7 @@
 // templates/parties.php
 if (!defined('ABSPATH')) exit;
 
-$today = date('M j, Y');
+$today = current_time('M j, Y');
 $total_previous = 0;
 $total_send = $up_total_send =0;
 $total_receive = $up_total_receive = 0;
@@ -35,7 +35,7 @@ if (!empty($parties)) {
          <input type="text" id="party-search" placeholder="Search parties..." style="width: 300px; margin-left: 20px;height: 50px">
 
          <div style="float: right; color: #666; font-size: 14px;">
-             <strong>Today:</strong> <span style="font-weight: 700"><?php echo $today; ?></span> |
+             <strong>Today:</strong> <span style="font-weight: 700"><?php echo current_time('M j, Y H:i'); ?></span> |
              <strong>Total Parties:</strong> <span style="font-weight: 700;color: #198754"><?php echo count($parties); ?></span>
          </div>
         <div class="mtp-total-balance">
@@ -94,7 +94,7 @@ if (!empty($parties)) {
                     <tr data-party-id="<?php echo $party->id; ?>">
                         <td><?php echo $party->id; ?></td>
                         <td>
-                            <strong class="party-name"><?php echo esc_html($party->party_name); ?></strong>
+                            <strong class="party-name" style="font-weight: 700"><?php echo esc_html($party->party_name); ?></strong>
                             <span class="party-email" style="display: none;"><?php echo esc_html($party->email); ?></span>
                             <span class="party-contact" style="display: none;"><?php echo esc_html($party->contact_number); ?></span>
                             <span class="party-address" style="display: none;"><?php echo esc_html($party->address); ?></span>
@@ -124,7 +124,8 @@ if (!empty($parties)) {
                             </button>
                             <?php endif; ?>
                             <?php
-                            if(isZero($party->current_balance) && $party->previous_balance !=0 && (isZero($party->today_receive) && isZero($party->today_send) )): ?>
+                            //isZero($party->current_balance) &&
+                            if($party->previous_balance !=0 && (isZero($party->today_receive) && isZero($party->today_send) )): ?>
                                 <button type="button" class="button button-warning button-small migrate-btn" data-id="<?php echo $party->id; ?>" title="Update Current Balance">
                                     <span class="dashicons dashicons-update"></span>
                                 </button>

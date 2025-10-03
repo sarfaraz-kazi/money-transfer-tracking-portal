@@ -84,9 +84,13 @@ wp-content/plugins/money-transfer-portal/
 2. Select date range using:
    - Custom date picker
    - Quick buttons (Today, This Week, This Month)
-3. Click "Generate Report"
-4. View party-wise summary and totals
-5. Export to CSV or print if needed
+3. Choose a report type:
+   - Summary / Party-wise
+   - Daily (Transactions)
+   - Daily Balances (History from `mtp_daily_balances`)
+4. Click "Generate Report"
+5. View results and totals appropriate to the selected type
+6. Export to CSV or print if needed
 
 ## 🎯 How It Works
 
