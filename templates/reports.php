@@ -124,12 +124,14 @@ if (!defined('ABSPATH')) exit;
                     </tr>
                 </thead>
                 <tbody>
-                    <?php 
+                    <?php
+                    $total_current_balance = 0; 
                     $total_period_sales = 0;
                     $total_period_received = 0;
                     $total_transactions_count = 0;
                     
-                    foreach ($report_data->party_data as $party): 
+                    foreach ($report_data->party_data as $party):
+                        $total_current_balance += $party->current_balance; 
                         $total_period_sales += $party->period_sales;
                         $total_period_received += $party->period_received;
                         $total_transactions_count += $party->transaction_count;
@@ -150,6 +152,7 @@ if (!defined('ABSPATH')) exit;
                     <tr style="background: #f0f0f0; font-weight: bold;">
                         <th>TOTALS:</th>
                         <th></th>
+                        <th><?php echo mtp_format_currency($total_current_balance); ?></th>
                         <th><?php echo mtp_format_currency($total_period_sales); ?></th>
                         <th><?php echo mtp_format_currency($total_period_received); ?></th>
                         <th><?php echo number_format($total_transactions_count); ?></th>

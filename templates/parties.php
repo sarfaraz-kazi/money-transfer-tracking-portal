@@ -125,7 +125,7 @@ if (!empty($parties)) {
                             <?php endif; ?>
                             <?php
                             //isZero($party->current_balance) &&
-                            if($party->previous_balance !=0 && (isZero($party->today_receive) && isZero($party->today_send) )): ?>
+                            if(isZero($party->current_balance) && $party->previous_balance !=0 && (isZero($party->today_receive) && isZero($party->today_send) )): ?>
                                 <button type="button" class="button button-warning button-small migrate-btn" data-id="<?php echo $party->id; ?>" title="Update Current Balance">
                                     <span class="dashicons dashicons-update"></span>
                                 </button>

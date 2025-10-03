@@ -430,6 +430,9 @@ class MoneyTransferPortal {
                     'today_receive' => 0,
                     'last_transaction_date' => $today
             );
+            if(isZero($party->current_balance)){
+                unset($parties_update_array['previous_balance']);
+            }
             $wpdb->update(
                 $parties_table,
                 $parties_update_array,
