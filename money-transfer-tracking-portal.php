@@ -3,7 +3,7 @@
  * Plugin Name: Money Transfer Portal
  * Plugin URI: https://sarfarajkazi7.link
  * Description: Simple money transfer management system for parties, transactions, and reports.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Sarfaraz Kazi
  * Author URI: https://sarfarajkazi7.link
  * License: GPL v2 or later
@@ -32,6 +32,7 @@ class MoneyTransferPortal {
         add_action('admin_enqueue_scripts', array($this, 'admin_scripts'));
         add_action( 'login_enqueue_scripts', array($this, 'my_custom_login_styles'));
         add_action('template_redirect', array($this, 'redirect_frontend_to_admin'));
+        add_action('mtp_daily_reset', array($this, 'cron_daily_reset'));
         // AJAX handlers
         add_action('wp_ajax_mtp_add_party', array($this, 'ajax_add_party'));
         add_action('wp_ajax_mtp_delete_party', array($this, 'ajax_delete_party'));
@@ -46,15 +47,20 @@ class MoneyTransferPortal {
         add_action('wp_ajax_mtp_export_parties', array($this, 'ajax_export_parties'));
         add_action('wp_ajax_mtp_generate_report', array($this, 'ajax_generate_report'));
         add_action('wp_ajax_mtp_export_report', array($this, 'ajax_export_report'));
+        add_action('wp_ajax_mtp_daily_balances_detail', array($this, 'ajax_daily_balances_detail'));
     }
     
     public function activate() {
         $this->create_tables();
         $this->set_default_options();
+        if (!wp_next_scheduled('mtp_daily_reset')) {
+            wp_schedule_event(time(), 'daily', 'mtp_daily_reset');
+        }
     }
     
     public function deactivate() {
-        // Cleanup if needed
+        // Cleanup scheduled events
+        wp_clear_scheduled_hook('mtp_daily_reset');
     }
     public function redirect_frontend_to_admin() {
 
@@ -152,11 +158,28 @@ class MoneyTransferPortal {
             UNIQUE KEY setting_key (setting_key)
         ) $charset_collate;";
         
+        // Activity Log Table
+        $activity_table = $wpdb->prefix . 'mtp_activity_log';
+        $sql5 = "CREATE TABLE $activity_table (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            action enum('add','edit','delete') NOT NULL,
+            entity_type enum('party','transaction','settings','report','balance') NOT NULL,
+            entity_id mediumint(9) NOT NULL,
+            user_id mediumint(9) DEFAULT NULL,
+            ip_address varchar(45) DEFAULT NULL,
+            description text,
+            created_date datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX idx_entity (entity_type, entity_id),
+            INDEX idx_user_date (user_id, created_date)
+        ) $charset_collate;";
+        
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql1);
         dbDelta($sql2);
         dbDelta($sql3);
         dbDelta($sql4);
+        dbDelta($sql5);
         
     }
     
@@ -168,7 +191,8 @@ class MoneyTransferPortal {
             'mtp_backup_frequency' => 'daily',
             'mtp_enable_notifications' => '1',
             'mtp_date_format' => 'Y-m-d',
-            'mtp_timezone' => 'Asia/Kolkata'
+            'mtp_timezone' => 'Asia/Kolkata',
+            'mtp_delete_pin' => '654321'
         );
         
         foreach ($default_settings as $key => $value) {
@@ -275,7 +299,7 @@ class MoneyTransferPortal {
         $total_parties = $wpdb->get_var("SELECT COUNT(*) FROM $parties_table WHERE status = 'active'");
         $total_balance = $wpdb->get_var("SELECT SUM(COALESCE(current_balance, 0)) FROM $parties_table WHERE status = 'active'");
         
-        $today = date('Y-m-d');
+        $today = current_time('Y-m-d');
         $today_transactions = $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM $transactions_table WHERE transaction_date = %s",
             $today
@@ -311,7 +335,7 @@ class MoneyTransferPortal {
         $parties_table = $wpdb->prefix . 'mtp_parties';
         $transactions_table = $wpdb->prefix . 'mtp_transactions';
         
-        $today = date('Y-m-d');
+        $today = current_time('Y-m-d');
         
         // Check if we need to reset daily balances (new day)
         $this->check_daily_reset();
@@ -361,9 +385,9 @@ class MoneyTransferPortal {
                     array('%d')
                 );
             } else {
-                // Only update if current_balance is not already set (to preserve migrations)
+                // No transactions today; ensure current_balance reflects opening (previous_balance)
                 if (isZero($party->current_balance)) {
-                    $current_balance = 0;
+                    $current_balance = $party->previous_balance;
 
                     $wpdb->update(
                         $parties_table,
@@ -393,7 +417,7 @@ class MoneyTransferPortal {
         $parties_table = $wpdb->prefix . 'mtp_parties';
         $daily_balances_table = $wpdb->prefix . 'mtp_daily_balances';
         
-        $today = date('Y-m-d');
+        $today = current_time('Y-m-d');
         
         // Get parties that need daily reset
         $parties_to_reset = $wpdb->get_results($wpdb->prepare("
@@ -423,24 +447,43 @@ class MoneyTransferPortal {
             }
             
             // Reset for new day - yesterday's closing becomes today's opening
-            $parties_update_array = array(
+            if (!isZero($party->current_balance)) {
+                // Preserve both previous_balance (today's opening) and show it as current at day start
+                $parties_update_array = array(
                     'previous_balance' => $party->current_balance,
-                    'current_balance' => 0,
+                    'current_balance' => $party->current_balance,
                     'today_send' => 0,
                     'today_receive' => 0,
                     'last_transaction_date' => $today
-            );
-            if(isZero($party->current_balance)){
-                unset($parties_update_array['previous_balance']);
+                );
+                $formats = array('%f', '%f', '%f', '%f', '%s');
+            } else {
+                // No balance to carry over; keep previous_balance as-is, but current should mirror it
+                $parties_update_array = array(
+                    'current_balance' => $party->current_balance,
+                    'today_send' => 0,
+                    'today_receive' => 0,
+                    'last_transaction_date' => $today
+                );
+                $formats = array('%f', '%f', '%f', '%s');
             }
+
             $wpdb->update(
                 $parties_table,
                 $parties_update_array,
                 array('id' => $party->id),
-                array('%f', '%f', '%f', '%s'),
+                $formats,
                 array('%d')
             );
         }
+    }
+
+    // Cron handler: runs daily to roll opening/current balances forward
+    public function cron_daily_reset() {
+        // Ensure WordPress timezone is respected via current_time inside check_daily_reset
+        $this->check_daily_reset();
+        // Optional: record an activity log entry for audit
+        $this->log_activity('edit', 'balance', 0, 'Cron daily reset executed');
     }
     
     public function transactions_page() {
@@ -520,9 +563,17 @@ class MoneyTransferPortal {
         $parties_table = $wpdb->prefix . 'mtp_parties';
         $transactions_table = $wpdb->prefix . 'mtp_transactions';
         
-        $date_from = isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : date('Y-m-01');
-        $date_to = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : date('Y-m-d');
+        $date_from = isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : wp_date('Y-m-01', current_time('timestamp'));
+        $date_to = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : current_time('Y-m-d');
         $report_type = isset($_GET['report_type']) ? sanitize_text_field($_GET['report_type']) : 'summary';
+        $party_id = isset($_GET['party_id']) ? intval($_GET['party_id']) : 0;
+        
+        // Provide parties list for UI filters
+        $parties = $wpdb->get_results("SELECT id, party_name FROM $parties_table WHERE status='active' ORDER BY id ASC");
+        $selected_party = null;
+        if ($party_id) {
+            $selected_party = $wpdb->get_row($wpdb->prepare("SELECT id, party_name FROM $parties_table WHERE id = %d", $party_id));
+        }
         
         $report_data = null;
         if (isset($_GET['generate_report'])) {
@@ -539,6 +590,9 @@ class MoneyTransferPortal {
                     break;
                 case 'daily_balances':
                     $report_data = $this->generate_daily_balances_report($date_from, $date_to);
+                    break;
+                case 'daily_balances_by_party':
+                    $report_data = $this->generate_daily_balances_by_party($date_from, $date_to, $party_id);
                     break;
                 default:
                     $report_data = $this->generate_summary_report($date_from, $date_to);
@@ -652,6 +706,44 @@ class MoneyTransferPortal {
         return $report;
     }
 
+    private function generate_daily_balances_by_party($date_from, $date_to, $party_id) {
+        global $wpdb;
+        $daily_balances_table = $wpdb->prefix . 'mtp_daily_balances';
+        $parties_table = $wpdb->prefix . 'mtp_parties';
+
+        if (!$party_id) {
+            $report = new stdClass();
+            $report->rows = array();
+            $report->totals = (object) array(
+                'opening' => 0,
+                'send' => 0,
+                'receive' => 0,
+                'closing' => 0
+            );
+            return $report;
+        }
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT db.transaction_date, db.party_id, p.party_name, db.opening_balance, db.total_send, db.total_receive, db.closing_balance
+             FROM $daily_balances_table db
+             LEFT JOIN $parties_table p ON db.party_id = p.id
+             WHERE db.party_id = %d AND db.transaction_date BETWEEN %s AND %s
+             ORDER BY db.transaction_date DESC",
+            $party_id, $date_from, $date_to
+        ));
+
+        $report = new stdClass();
+        $report->rows = $rows;
+        $report->totals = (object) array(
+            'opening' => array_sum(array_map(function($r){ return (float)$r->opening_balance; }, $rows)),
+            'send' => array_sum(array_map(function($r){ return (float)$r->total_send; }, $rows)),
+            'receive' => array_sum(array_map(function($r){ return (float)$r->total_receive; }, $rows)),
+            'closing' => array_sum(array_map(function($r){ return (float)$r->closing_balance; }, $rows))
+        );
+
+        return $report;
+    }
+
     public function ajax_add_party() {
         check_ajax_referer('mtp_nonce', 'nonce');
         
@@ -677,13 +769,14 @@ class MoneyTransferPortal {
                 'email' => $email,
                 'address' => $address,
                 'previous_balance' => $previous_balance,
-                'current_balance' => 0,
-                'last_transaction_date' => date('Y-m-d')
+                'current_balance' => $previous_balance,
+                'last_transaction_date' => current_time('Y-m-d')
             ),
             array('%s', '%s', '%s', '%s', '%f', '%f', '%s')
         );
         
         if ($result) {
+            $this->log_activity('add', 'party', $wpdb->insert_id, sprintf('Added party "%s" with opening %.2f', $party_name, $previous_balance));
             wp_send_json_success('Party added successfully');
         } else {
             wp_send_json_error('Failed to add party');
@@ -725,7 +818,7 @@ class MoneyTransferPortal {
                     'previous_balance' => 0,
                     'today_send' => 0,
                     'today_receive' => 0,
-                    'last_transaction_date' => date('Y-m-d')
+                    'last_transaction_date' => current_time('Y-m-d')
                 ),
                 array('id' => $party_id),
                 array('%f', '%f', '%f', '%f', '%s'),
@@ -736,6 +829,7 @@ class MoneyTransferPortal {
                 wp_send_json_error('Update failed: ' . $wpdb->last_error);
                 return;
             }
+            $this->log_activity('edit', 'party', $party_id, sprintf('Migrated party ID %d: current_balance set to previous_balance %.2f', $party_id, (float)$previous_balance));
             wp_send_json_success('Party migrated successfully');
         } catch (Exception $e) {
             wp_send_json_error('Failed to migrate: ' . $e->getMessage());
@@ -745,11 +839,13 @@ class MoneyTransferPortal {
     public function ajax_delete_party() {
         check_ajax_referer('mtp_nonce', 'nonce');
         
+        /*
         if (!current_user_can('manage_options')) {
             wp_send_json_error('Only administrators can delete parties');
             return;
         }
-        
+        */
+
         global $wpdb;
         $parties_table = $wpdb->prefix . 'mtp_parties';
         $transactions_table = $wpdb->prefix . 'mtp_transactions';
@@ -758,7 +854,7 @@ class MoneyTransferPortal {
 
         $entered_pin = sanitize_text_field($_POST['pin']);
 
-        $correct_pin = '654321';
+        $correct_pin = get_option('mtp_delete_pin', '654321');
 
         // Verify PIN
         if ($entered_pin !== $correct_pin) {
@@ -780,6 +876,7 @@ class MoneyTransferPortal {
         $result = $wpdb->delete($parties_table, array('id' => $party_id), array('%d'));
         
         if ($result) {
+            $this->log_activity('delete', 'party', $party_id, sprintf('Deleted party ID %d (no transactions)', $party_id));
             wp_send_json_success('Party deleted successfully');
         } else {
             wp_send_json_error('Failed to delete party');
@@ -802,7 +899,7 @@ class MoneyTransferPortal {
         $amount = floatval($_POST['amount']);
         $description = sanitize_textarea_field($_POST['description']);
         $receiver_name = sanitize_text_field($_POST['receiver_name']);
-        $today = date('Y-m-d');
+        $today = current_time('Y-m-d');
         
         if ($amount <= 0) {
             wp_send_json_error('Amount must be greater than zero');
@@ -851,6 +948,7 @@ class MoneyTransferPortal {
             $wpdb->query('COMMIT');
             
             $updated_balance = $wpdb->get_var($wpdb->prepare("SELECT current_balance FROM $parties_table WHERE id = %d", $party_id));
+            $this->log_activity('add', 'transaction', $wpdb->insert_id, sprintf('Send txn ref %s amount %.2f for party %d', $reference_number, $amount, $party_id));
             
             wp_send_json_success(array(
                 'message' => 'Send transaction added successfully',
@@ -880,7 +978,7 @@ class MoneyTransferPortal {
         $amount = floatval($_POST['amount']);
         $description = sanitize_textarea_field($_POST['description']);
         $sender_name = sanitize_text_field($_POST['sender_name']);
-        $today = date('Y-m-d');
+        $today = current_time('Y-m-d');
         
         if ($amount <= 0) {
             wp_send_json_error('Amount must be greater than zero');
@@ -929,6 +1027,7 @@ class MoneyTransferPortal {
             $wpdb->query('COMMIT');
             
             $updated_balance = $wpdb->get_var($wpdb->prepare("SELECT current_balance FROM $parties_table WHERE id = %d", $party_id));
+            $this->log_activity('add', 'transaction', $wpdb->insert_id, sprintf('Receive txn ref %s amount %.2f for party %d', $reference_number, $amount, $party_id));
             
             wp_send_json_success(array(
                 'message' => 'Receive transaction added successfully',
@@ -944,9 +1043,46 @@ class MoneyTransferPortal {
     
     private function generate_reference_number() {
         $prefix = get_option('mtp_reference_prefix', 'MTP');
-        $date = date('Ymd');
+        $date = current_time('Ymd');
         $random = str_pad(mt_rand(1, 9999), 4, '0', STR_PAD_LEFT);
         return $prefix . $date . $random;
+    }
+    
+    private function get_client_ip() {
+        $ip_keys = array('HTTP_CLIENT_IP','HTTP_X_FORWARDED_FOR','HTTP_X_REAL_IP','REMOTE_ADDR');
+        foreach ($ip_keys as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ip = $_SERVER[$key];
+                // If proxied, take first in list
+                if (strpos($ip, ',') !== false) {
+                    $parts = explode(',', $ip);
+                    $ip = trim($parts[0]);
+                }
+                return sanitize_text_field($ip);
+            }
+        }
+        return '';
+    }
+    
+    private function log_activity($action, $entity_type, $entity_id, $description = '') {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mtp_activity_log';
+        $user_id = get_current_user_id();
+        $ip = $this->get_client_ip();
+        // Best-effort logging; ignore failures
+        $wpdb->insert(
+            $table,
+            array(
+                'action' => $action,
+                'entity_type' => $entity_type,
+                'entity_id' => intval($entity_id),
+                'user_id' => $user_id ?: null,
+                'ip_address' => $ip ?: null,
+                'description' => $description,
+                'created_date' => current_time('mysql')
+            ),
+            array('%s','%s','%d','%d','%s','%s','%s')
+        );
     }
     
     public function ajax_add_transaction() {
@@ -967,7 +1103,7 @@ class MoneyTransferPortal {
         $description = sanitize_textarea_field($_POST['description']);
         $sender_name = sanitize_text_field($_POST['sender_name']);
         $receiver_name = sanitize_text_field($_POST['receiver_name']);
-        $today = date('Y-m-d');
+        $today = current_time('Y-m-d');
         
         if ($amount <= 0) {
             wp_send_json_error('Amount must be greater than zero');
@@ -1022,6 +1158,7 @@ class MoneyTransferPortal {
             }
             
             $wpdb->query('COMMIT');
+            $this->log_activity('add', 'transaction', $wpdb->insert_id, sprintf('Added txn ref %s type %s amount %.2f for party %d', $reference_number, $transaction_type, $amount, $party_id));
             wp_send_json_success('Transaction added successfully');
             
         } catch (Exception $e) {
@@ -1060,6 +1197,7 @@ class MoneyTransferPortal {
         );
         
         if ($result !== false) {
+            $this->log_activity('edit', 'transaction', $transaction_id, 'Edited transaction fields (description/sender/receiver)');
             wp_send_json_success('Transaction updated successfully');
         } else {
             wp_send_json_error('Failed to update transaction');
@@ -1069,16 +1207,26 @@ class MoneyTransferPortal {
     public function ajax_delete_transaction() {
         check_ajax_referer('mtp_nonce', 'nonce');
         
+        /*
         if (!current_user_can('manage_options')) {
             wp_send_json_error('Only administrators can delete transactions');
             return;
         }
+        */
         
         global $wpdb;
         $transactions_table = $wpdb->prefix . 'mtp_transactions';
         $parties_table = $wpdb->prefix . 'mtp_parties';
         
         $transaction_id = intval($_POST['transaction_id']);
+
+        // PIN verification (same as party deletion)
+        $entered_pin = isset($_POST['pin']) ? sanitize_text_field($_POST['pin']) : '';
+        $correct_pin = get_option('mtp_delete_pin', '654321');
+        if ($entered_pin !== $correct_pin) {
+            wp_send_json_error('Incorrect PIN. Deletion cancelled.');
+            return;
+        }
         
         $transaction = $wpdb->get_row($wpdb->prepare("SELECT * FROM $transactions_table WHERE id = %d", $transaction_id));
         
@@ -1116,6 +1264,7 @@ class MoneyTransferPortal {
             }
             
             $wpdb->query('COMMIT');
+            $this->log_activity('delete', 'transaction', $transaction_id, sprintf('Deleted txn ref %s amount %.2f for party %d', $transaction->reference_number, $transaction->amount, $transaction->party_id));
             wp_send_json_success('Transaction deleted successfully');
             
         } catch (Exception $e) {
@@ -1172,7 +1321,7 @@ class MoneyTransferPortal {
         
         // Set headers for CSV download
         header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="parties_export_' . date('Y-m-d') . '.csv"');
+        header('Content-Disposition: attachment; filename="parties_export_' . current_time('Y-m-d') . '.csv"');
         
         $output = fopen('php://output', 'w');
         
@@ -1254,30 +1403,80 @@ class MoneyTransferPortal {
         $date_to = sanitize_text_field($_GET['date_to']);
         
         try {
-            $report_data = $this->generate_summary_report($date_from, $date_to);
-            
             // Set headers for CSV download
             header('Content-Type: text/csv');
-            header('Content-Disposition: attachment; filename="report_' . $date_from . '_to_' . $date_to . '.csv"');
+            header('Content-Disposition: attachment; filename="report_' . $report_type . '_' . $date_from . '_to_' . $date_to . '.csv"');
             
             $output = fopen('php://output', 'w');
             
-            // CSV headers
-            fputcsv($output, array(
-                'Party Name', 'Current Balance', 'Period Sales', 'Period Received', 'Transaction Count'
-            ));
-            
-            // CSV data
-            if (isset($report_data->party_data)) {
-                foreach ($report_data->party_data as $party) {
-                    fputcsv($output, array(
-                        $party->party_name,
-                        number_format($party->current_balance, 2),
-                        number_format($party->period_sales, 2),
-                        number_format($party->period_received, 2),
-                        $party->transaction_count
-                    ));
-                }
+            switch ($report_type) {
+                case 'summary':
+                case 'party_wise':
+                    $report_data = $this->generate_summary_report($date_from, $date_to);
+                    fputcsv($output, array('Party Name', 'Current Balance', 'Period Sales', 'Period Received', 'Transaction Count'));
+                    if (isset($report_data->party_data)) {
+                        foreach ($report_data->party_data as $party) {
+                            fputcsv($output, array(
+                                $party->party_name,
+                                number_format($party->current_balance, 2),
+                                number_format($party->period_sales, 2),
+                                number_format($party->period_received, 2),
+                                $party->transaction_count
+                            ));
+                        }
+                    }
+                    break;
+                case 'daily':
+                    $report_data = $this->generate_daily_report($date_from, $date_to);
+                    fputcsv($output, array('Date', 'Send', 'Received', 'Transactions'));
+                    if (isset($report_data->daily_data)) {
+                        foreach ($report_data->daily_data as $day) {
+                            fputcsv($output, array(
+                                $day->transaction_date,
+                                number_format($day->daily_send, 2),
+                                number_format($day->daily_receive, 2),
+                                $day->daily_transactions
+                            ));
+                        }
+                    }
+                    break;
+                case 'daily_balances':
+                    $report_data = $this->generate_daily_balances_report($date_from, $date_to);
+                    fputcsv($output, array('Date', 'Opening', 'Send', 'Received', 'Closing', 'Parties'));
+                    if (isset($report_data->daily_history)) {
+                        foreach ($report_data->daily_history as $day) {
+                            fputcsv($output, array(
+                                $day->transaction_date,
+                                number_format($day->opening_total, 2),
+                                number_format($day->daily_send_total, 2),
+                                number_format($day->daily_receive_total, 2),
+                                number_format($day->closing_total, 2),
+                                $day->parties_count
+                            ));
+                        }
+                    }
+                    break;
+                case 'daily_balances_by_party':
+                    $party_id = isset($_GET['party_id']) ? intval($_GET['party_id']) : 0;
+                    $report_data = $this->generate_daily_balances_by_party($date_from, $date_to, $party_id);
+                    fputcsv($output, array('Date', 'Party ID', 'Party Name', 'Opening', 'Send', 'Received', 'Closing'));
+                    if (isset($report_data->rows)) {
+                        foreach ($report_data->rows as $row) {
+                            fputcsv($output, array(
+                                $row->transaction_date,
+                                $row->party_id,
+                                $row->party_name,
+                                number_format($row->opening_balance, 2),
+                                number_format($row->total_send, 2),
+                                number_format($row->total_receive, 2),
+                                number_format($row->closing_balance, 2)
+                            ));
+                        }
+                    }
+                    break;
+                default:
+                    fclose($output);
+                    wp_die('Invalid report type');
             }
             
             fclose($output);
@@ -1286,6 +1485,26 @@ class MoneyTransferPortal {
         } catch (Exception $e) {
             wp_die('Failed to export report: ' . $e->getMessage());
         }
+    }
+    
+    public function ajax_daily_balances_detail() {
+        check_ajax_referer('mtp_nonce', 'nonce');
+        if (!$this->can_user_access()) {
+            wp_send_json_error('Access denied');
+            return;
+        }
+
+        $date = sanitize_text_field($_GET['date']);
+        global $wpdb;
+        $daily_balances_table = $wpdb->prefix . 'mtp_daily_balances';
+        $parties_table = $wpdb->prefix . 'mtp_parties';
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT db.transaction_date, db.party_id, p.party_name, db.opening_balance, db.total_send, db.total_receive, db.closing_balance\n             FROM $daily_balances_table db\n             LEFT JOIN $parties_table p ON db.party_id = p.id\n             WHERE db.transaction_date = %s\n             ORDER BY p.party_name ASC",
+            $date
+        ));
+
+        wp_send_json_success(array('date' => $date, 'rows' => $rows));
     }
 }
 

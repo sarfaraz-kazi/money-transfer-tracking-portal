@@ -583,22 +583,45 @@ jQuery(document).ready(function($) {
     $('.delete-transaction-btn').click(function() {
         const transactionId = $(this).data('id');
         const reference = $(this).closest('tr').find('.transaction-reference').text();
-        
-        if (confirm(`Are you sure you want to delete transaction "${reference}"? This action cannot be undone.`)) {
-            $.post(mtp_ajax.ajax_url, {
-                action: 'mtp_delete_transaction',
-                transaction_id: transactionId,
-                nonce: mtp_ajax.nonce
-            })
-            .done(function(response) {
-                if (response.success) {
-                    showNotification('Transaction deleted successfully!');
-                    location.reload();
-                } else {
-                    showNotification(response.data || 'Error deleting transaction', 'error');
-                }
-            });
+
+        // First confirmation
+        const confirmDelete = confirm(`Are you sure you want to delete transaction "${reference}"? This action cannot be undone.`);
+        if (!confirmDelete) {
+            return;
         }
+
+        // Prompt for PIN (same as party deletion)
+        const pin = prompt('Please enter your 6-digit PIN to confirm deletion:');
+
+        // If user cancelled
+        if (pin === null) {
+            return;
+        }
+
+        // Validate PIN format
+        if (!/^\d{6}$/.test(pin)) {
+            alert('Invalid PIN. Please enter a 6-digit PIN.');
+            return;
+        }
+
+        // Send delete request with PIN
+        $.post(mtp_ajax.ajax_url, {
+            action: 'mtp_delete_transaction',
+            transaction_id: transactionId,
+            pin: pin,
+            nonce: mtp_ajax.nonce
+        })
+        .done(function(response) {
+            if (response.success) {
+                showNotification('Transaction deleted successfully!');
+                location.reload();
+            } else {
+                showNotification(response.data || 'Error deleting transaction', 'error');
+            }
+        })
+        .fail(function() {
+            showNotification('An error occurred. Please try again.', 'error');
+        });
     });
     
     // Transaction Type Change
@@ -614,11 +637,23 @@ jQuery(document).ready(function($) {
     
     // REPORTS
     
+    // Toggle party filter visibility based on report type
+    $('#report_type').on('change', function() {
+        const type = $(this).val();
+        if (type === 'daily_balances_by_party') {
+            $('#party_filter_group').show();
+            
+        } else {
+            $('#party_filter_group').hide();
+        }
+    });
+    
     // Generate Report
     $('#generate-report-btn').click(function() {
         const dateFrom = $('#date_from').val();
         const dateTo = $('#date_to').val();
         const reportType = $('#report_type').val();
+        const partyId = $('#party_filter_group').is(':visible') ? $('#party_filter').val() : '';
         
         if (!dateFrom || !dateTo) {
             showNotification('Please select both from and to dates', 'warning');
@@ -627,7 +662,7 @@ jQuery(document).ready(function($) {
         
         const url = window.location.pathname + window.location.search + 
             (window.location.search ? '&' : '?') + 
-            'generate_report=1&date_from=' + dateFrom + '&date_to=' + dateTo + '&report_type=' + encodeURIComponent(reportType);
+            'generate_report=1&date_from=' + dateFrom + '&date_to=' + dateTo + '&report_type=' + encodeURIComponent(reportType) + (partyId ? ('&party_id=' + encodeURIComponent(partyId)) : '');
             
         window.location.href = url;
     });
@@ -681,6 +716,20 @@ jQuery(document).ready(function($) {
                 const closing = row.find('.daily-closing').text().replace('₹', '').replace(/,/g, '').trim();
                 const parties = row.find('.daily-parties').text().trim();
                 csvContent += `"${date}",${opening},${send},${receive},${closing},${parties}\n`;
+            });
+        } else if ($('.daily-balances-by-party-row').length) {
+            // Daily balances by party export
+            csvContent += "Date,Party ID,Party Name,Opening,Total Send,Total Received,Closing\n";
+            $('.daily-balances-by-party-row').each(function() {
+                const row = $(this);
+                const date = row.find('td').eq(0).text().trim();
+                const partyId = row.find('.party-id-cell').text().trim();
+                const partyName = row.find('.party-name-cell').text().trim();
+                const opening = row.find('.daily-opening').text().replace('₹', '').replace(/,/g, '').trim();
+                const send = row.find('.daily-send').text().replace('₹', '').replace(/,/g, '').trim();
+                const receive = row.find('.daily-receive').text().replace('₹', '').replace(/,/g, '').trim();
+                const closing = row.find('.daily-closing').text().replace('₹', '').replace(/,/g, '').trim();
+                csvContent += `"${date}",${partyId},"${partyName}",${opening},${send},${receive},${closing}\n`;
             });
         } else {
             showNotification('No report data to export', 'warning');

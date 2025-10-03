@@ -44,7 +44,7 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
                         </td>
                         <td>
                             <?php echo date('M j, Y', strtotime($transaction->transaction_date)); ?>
-                            <br><small><?php echo date('H:i', strtotime($transaction->transaction_date)); ?></small>
+                            <br><small><?php echo date('h:i a', strtotime($transaction->transaction_time)); ?></small>
                         </td>
                         <td>
                             <strong><?php echo esc_html($transaction->party_name); ?></strong>

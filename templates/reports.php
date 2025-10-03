@@ -28,6 +28,19 @@ if (!defined('ABSPATH')) exit;
                     <option value="party_wise" <?php echo $report_type === 'party_wise' ? 'selected' : ''; ?>>Party-wise</option>
                     <option value="daily" <?php echo $report_type === 'daily' ? 'selected' : ''; ?>>Daily (Transactions)</option>
                     <option value="daily_balances" <?php echo $report_type === 'daily_balances' ? 'selected' : ''; ?>>Daily Balances (History)</option>
+                    <option value="daily_balances_by_party" <?php echo $report_type === 'daily_balances_by_party' ? 'selected' : ''; ?>>Daily Balances by Party</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="party_filter_group" style="<?php echo $report_type === 'daily_balances_by_party' ? '' : 'display:none;'; ?>">
+                <label for="party_filter">Select Party:</label>
+                <select id="party_filter" name="party_id">
+                    <option value="">-- Choose Party --</option>
+                    <?php if (!empty($parties)) : foreach ($parties as $p) : ?>
+                        <option value="<?php echo (int)$p->id; ?>" <?php echo (!empty($selected_party) && (int)$selected_party->id === (int)$p->id) ? 'selected' : ''; ?>>
+                            <?php echo esc_html($p->party_name) . ' (ID: ' . (int)$p->id . ')'; ?>
+                        </option>
+                    <?php endforeach; endif; ?>
                 </select>
             </div>
             
@@ -51,7 +64,12 @@ if (!defined('ABSPATH')) exit;
     <!-- Report Content -->
     <div class="mtp-report-content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2>Report for <?php echo date('M j, Y', strtotime($date_from)); ?> to <?php echo date('M j, Y', strtotime($date_to)); ?></h2>
+            <h2>
+                Report for <?php echo date('M j, Y', strtotime($date_from)); ?> to <?php echo date('M j, Y', strtotime($date_to)); ?>
+                <?php if ($report_type === 'daily_balances_by_party' && !empty($selected_party)) : ?>
+                    <br><small>Party: ID <?php echo (int)$selected_party->id; ?> — <?php echo esc_html($selected_party->party_name); ?></small>
+                <?php endif; ?>
+            </h2>
             <div>
                 <button type="button" id="export-report-btn" class="button">
                     <span class="dashicons dashicons-download"></span> Export CSV
@@ -241,32 +259,80 @@ if (!defined('ABSPATH')) exit;
                     </tr>
                 </tfoot>
             </table>
+        <?php elseif ($report_type === 'daily_balances_by_party'): ?>
+            <!-- Daily Balances by Party -->
+            <h3>Daily Balances — Party Detail</h3>
+            <?php if (!empty($report_data->rows)) : ?>
+            <table class="wp-list-table widefat striped" border="1">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Party ID</th>
+                        <th>Party Name</th>
+                        <th>Opening</th>
+                        <th>Total Send</th>
+                        <th>Total Received</th>
+                        <th>Closing</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($report_data->rows as $row): ?>
+                        <tr class="daily-balances-by-party-row">
+                            <td><?php echo esc_html($row->transaction_date); ?></td>
+                            <td class="party-id-cell"><?php echo (int)$row->party_id; ?></td>
+                            <td class="party-name-cell"><?php echo esc_html($row->party_name); ?></td>
+                            <td class="daily-opening"><?php echo mtp_format_currency($row->opening_balance); ?></td>
+                            <td class="daily-send"><?php echo mtp_format_currency($row->total_send); ?></td>
+                            <td class="daily-receive"><?php echo mtp_format_currency($row->total_receive); ?></td>
+                            <td class="daily-closing"><?php echo mtp_format_currency($row->closing_balance); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f0f0f0; font-weight: bold;">
+                        <th>TOTALS:</th>
+                        <th></th>
+                        <th></th>
+                        <th><?php echo mtp_format_currency($report_data->totals->opening); ?></th>
+                        <th><?php echo mtp_format_currency($report_data->totals->send); ?></th>
+                        <th><?php echo mtp_format_currency($report_data->totals->receive); ?></th>
+                        <th><?php echo mtp_format_currency($report_data->totals->closing); ?></th>
+                    </tr>
+                </tfoot>
+            </table>
+            <?php else: ?>
+                <p>No data found for the selected party and period.</p>
+            <?php endif; ?>
         <?php endif; ?>
         
         <!-- Net Position -->
-        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px;">
-            <h3>Net Position</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                <div>
-                    <strong>Period Sales:</strong><br>
-                    <span style="color: #dc3545; font-size: 18px;"><?php echo mtp_format_currency($report_data->total_sales); ?></span>
-                </div>
-                <div>
-                    <strong>Period Received:</strong><br>
-                    <span style="color: #198754; font-size: 18px;"><?php echo mtp_format_currency($report_data->total_received); ?></span>
-                </div>
-                <div>
-                    <strong>Net Amount:</strong><br>
-                    <?php 
-                    $net_amount = $report_data->total_received - $report_data->total_sales;
-                    $net_class = $net_amount >= 0 ? '#198754' : '#dc3545';
-                    ?>
-                    <span style="color: <?php echo $net_class; ?>; font-size: 18px; font-weight: bold;">
-                        <?php echo mtp_format_currency($net_amount); ?>
-                    </span>
+         <?php
+         if(isset($report_data->total_sales) && isset($report_data->total_received)):
+         ?>
+            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px;">
+                <h3>Net Position</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div>
+                        <strong>Period Sales:</strong><br>
+                        <span style="color: #dc3545; font-size: 18px;"><?php echo mtp_format_currency($report_data->total_sales); ?></span>
+                    </div>
+                    <div>
+                        <strong>Period Received:</strong><br>
+                        <span style="color: #198754; font-size: 18px;"><?php echo mtp_format_currency($report_data->total_received); ?></span>
+                    </div>
+                    <div>
+                        <strong>Net Amount:</strong><br>
+                        <?php 
+                        $net_amount = $report_data->total_received - $report_data->total_sales;
+                        $net_class = $net_amount >= 0 ? '#198754' : '#dc3545';
+                        ?>
+                        <span style="color: <?php echo $net_class; ?>; font-size: 18px; font-weight: bold;">
+                            <?php echo mtp_format_currency($net_amount); ?>
+                        </span>
+                    </div>
                 </div>
             </div>
-        </div>
+        <?php endif; ?>
     </div>
     
     <?php else: ?>
